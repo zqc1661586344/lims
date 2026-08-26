@@ -3,11 +3,21 @@ package middleware
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"lims-backend/internal/model"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
+
+// normalizeJSON ensures a value written to a jsonb column is valid JSON.
+// An empty string is not valid JSON in PostgreSQL — use "null" instead.
+func normalizeJSON(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "null"
+	}
+	return s
+}
 
 // AuditPlugin implements GORM's plugin interface to automatically
 // record data changes (CREATE/UPDATE/DELETE) in the audit_logs table.
@@ -71,12 +81,13 @@ func (p *AuditPlugin) afterCreate(skipTables map[string]bool) func(db *gorm.DB) 
 		newData, _ := json.Marshal(db.Statement.Dest)
 
 		entry := model.AuditLog{
-			AffectedTable:  db.Statement.Table,
+			AffectedTable: db.Statement.Table,
 			RecordID:   recordID,
 			Action:     "CREATE",
 			OperatorID: operatorID,
 			Operator:   operator,
-			NewData:    string(newData),
+			OldData:    "null", // CREATE has no previous state; jsonb requires valid JSON
+			NewData:    normalizeJSON(string(newData)),
 		}
 
 		if err := db.Session(&gorm.Session{NewDB: true, SkipHooks: true}).Create(&entry).Error; err != nil {
@@ -120,13 +131,13 @@ func (p *AuditPlugin) afterUpdate(skipTables map[string]bool) func(db *gorm.DB) 
 		newData, _ := json.Marshal(db.Statement.Dest)
 
 		entry := model.AuditLog{
-			AffectedTable:  db.Statement.Table,
+			AffectedTable: db.Statement.Table,
 			RecordID:   recordID,
 			Action:     "UPDATE",
 			OperatorID: operatorID,
 			Operator:   operator,
-			OldData:    string(oldData),
-			NewData:    string(newData),
+			OldData:    normalizeJSON(string(oldData)),
+			NewData:    normalizeJSON(string(newData)),
 		}
 
 		if err := db.Session(&gorm.Session{NewDB: true, SkipHooks: true}).Create(&entry).Error; err != nil {
@@ -163,12 +174,13 @@ func (p *AuditPlugin) afterDelete(skipTables map[string]bool) func(db *gorm.DB) 
 		}
 
 		entry := model.AuditLog{
-			AffectedTable:  db.Statement.Table,
+			AffectedTable: db.Statement.Table,
 			RecordID:   recordID,
 			Action:     "DELETE",
 			OperatorID: operatorID,
 			Operator:   operator,
-			OldData:    string(oldData),
+			OldData:    normalizeJSON(string(oldData)),
+			NewData:    "null", // DELETE has no new state; jsonb requires valid JSON
 		}
 
 		if err := db.Session(&gorm.Session{NewDB: true, SkipHooks: true}).Create(&entry).Error; err != nil {

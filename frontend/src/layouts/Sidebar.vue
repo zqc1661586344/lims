@@ -29,7 +29,7 @@
           <template #title>用户管理</template>
         </el-menu-item>
         <el-menu-item index="/system/depts">
-          <el-icon><Organization /></el-icon>
+          <el-icon><OfficeBuilding /></el-icon>
           <template #title>部门管理</template>
         </el-menu-item>
         <el-menu-item index="/system/roles">
@@ -144,7 +144,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Odometer, Setting, User, Organization, Key, FolderOpened, List, Document, Monitor, Box, TrendCharts, Bell, Edit, DataAnalysis, Calendar, Location, UserFilled, EditPen, Search, Finished, Stamp, Printer } from '@element-plus/icons-vue'
+import { Odometer, Setting, User, OfficeBuilding, Key, FolderOpened, List, Document, Monitor, Box, TrendCharts, Bell, Edit, DataAnalysis, Calendar, Location, UserFilled, EditPen, Search, Finished, Stamp, Printer } from '@element-plus/icons-vue'
 
 const props = withDefaults(defineProps<{ collapsed: boolean }>(), {
   collapsed: false,

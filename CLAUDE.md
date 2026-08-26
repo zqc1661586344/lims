@@ -166,3 +166,15 @@ Each business node follows the same pattern. To add a new node (e.g., Phase 9's 
 - Docker Compose (`deploy/docker-compose.yml`): PostgreSQL + MinIO (file storage, S3-compatible)
 - MinIO: API `localhost:9000`, Console `localhost:9001`, user `lims`, password `lims123`
 - Production: Nginx reverse proxy serving frontend static + proxying `/api` to backend
+
+## 运行时必须遵守的原则
+
+> **只管找出问题，告诉我怎么操作，我自己来运行验证。**
+>
+> 你不应该运行任何命令。你只负责分析代码、定位问题、给出修复方案和验证步骤，所有命令都由我来手动执行。
+
+## 注意事项
+
+- 所有需要 `curl`、`python`、`uv`、`pip`、`sqlite3`、`.venv/` 等命令的操作，都只写出命令，由我执行。
+- 你可以阅读文件、搜索代码、分析逻辑，但不要用 Bash 运行任何东西。
+- 文件修改（Edit/Write）可以进行，但修改后告诉我需要重启什么服务、执行什么命令来验证。

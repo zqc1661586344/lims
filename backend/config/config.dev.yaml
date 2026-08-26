@@ -6,8 +6,8 @@ server:
 database:
   host: localhost
   port: 5432
-  user: lims
-  password: lims123
+  user: postgres
+  password: Zqc166879@
   dbname: lims
   sslmode: disable
   max_idle_conns: 10

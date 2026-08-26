@@ -43,11 +43,11 @@ func main() {
 	}
 	logger.Info("Database connected")
 
-	// Seed default data
-	seed.Run(db, logger)
-
-	// 4. Setup Gin router
+	// 4. Setup Gin router (autoMigrate runs inside router.Setup)
 	r := router.Setup(cfg, logger, db)
+
+	// Seed default data (must run after autoMigrate)
+	seed.Run(db, logger)
 
 	// 5. Start HTTP server
 	srv := &http.Server{
