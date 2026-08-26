@@ -1,0 +1,148 @@
+package routes
+
+import (
+	"lims-backend/internal/config"
+	"lims-backend/internal/handler"
+	"lims-backend/internal/middleware"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+// RegisterBusinessRoutes registers Phase 6 business process routes.
+func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
+	taskOrderH := handler.NewTaskOrderHandler(db)
+	contractReviewH := handler.NewContractReviewHandler(db)
+	qcTaskH := handler.NewQCTaskHandler(db)
+	samplingScheduleH := handler.NewSamplingScheduleHandler(db)
+	fieldSamplingH := handler.NewFieldSamplingRecordHandler(db)
+	sampleReceivingH := handler.NewSampleReceivingHandler(db)
+	taskAssignH := handler.NewTaskAssignHandler(db)
+	dataEntryH := handler.NewDataEntryHandler(db)
+	dataReviewH := handler.NewDataReviewHandler(db)
+	dataAuditH := handler.NewDataAuditHandler(db)
+	reportPrepareH := handler.NewReportPrepareHandler(db)
+	reportReviewH := handler.NewReportReviewHandler(db)
+	reportAuditH := handler.NewReportAuditHandler(db)
+
+	group := r.Group("/business")
+	group.Use(middleware.AuthMiddleware(cfg))
+	group.Use(middleware.GormContextMiddleware(db))
+	{
+		// Task Orders (Node 1: 任务委托)
+		group.GET("/task-orders", taskOrderH.List)
+		group.POST("/task-orders", taskOrderH.Create)
+		group.GET("/task-orders/:id", taskOrderH.Get)
+		group.PUT("/task-orders/:id", taskOrderH.Update)
+		group.DELETE("/task-orders/:id", taskOrderH.Delete)
+		group.POST("/task-orders/:id/submit", taskOrderH.Submit)
+
+		// Contract Reviews (Node 2: 合同评审)
+		group.GET("/contract-reviews", contractReviewH.List)
+		group.POST("/contract-reviews", contractReviewH.Create)
+		group.GET("/contract-reviews/:id", contractReviewH.Get)
+		group.PUT("/contract-reviews/:id", contractReviewH.Update)
+		group.DELETE("/contract-reviews/:id", contractReviewH.Delete)
+		group.POST("/contract-reviews/:id/approve", contractReviewH.Approve)
+		group.POST("/contract-reviews/:id/reject", contractReviewH.Reject)
+
+		// QC Tasks (Node 3: 质控任务)
+		group.GET("/qc-tasks", qcTaskH.List)
+		group.POST("/qc-tasks", qcTaskH.Create)
+		group.GET("/qc-tasks/:id", qcTaskH.Get)
+		group.PUT("/qc-tasks/:id", qcTaskH.Update)
+		group.DELETE("/qc-tasks/:id", qcTaskH.Delete)
+		group.POST("/qc-tasks/:id/approve", qcTaskH.Approve)
+		group.POST("/qc-tasks/:id/reject", qcTaskH.Reject)
+
+		// Sampling Schedules (Node 4: 采样调度)
+		group.GET("/sampling-schedules", samplingScheduleH.List)
+		group.POST("/sampling-schedules", samplingScheduleH.Create)
+		group.GET("/sampling-schedules/:id", samplingScheduleH.Get)
+		group.PUT("/sampling-schedules/:id", samplingScheduleH.Update)
+		group.DELETE("/sampling-schedules/:id", samplingScheduleH.Delete)
+		group.POST("/sampling-schedules/:id/approve", samplingScheduleH.Approve)
+		group.POST("/sampling-schedules/:id/reject", samplingScheduleH.Reject)
+
+		// Field Sampling Records (Node 5: 现场采样)
+		group.GET("/field-sampling", fieldSamplingH.List)
+		group.POST("/field-sampling", fieldSamplingH.Create)
+		group.GET("/field-sampling/:id", fieldSamplingH.Get)
+		group.PUT("/field-sampling/:id", fieldSamplingH.Update)
+		group.DELETE("/field-sampling/:id", fieldSamplingH.Delete)
+		group.POST("/field-sampling/:id/approve", fieldSamplingH.Approve)
+		group.POST("/field-sampling/:id/reject", fieldSamplingH.Reject)
+
+		// Sample Receiving (Node 6: 样品接收)
+		group.GET("/sample-receiving", sampleReceivingH.List)
+		group.POST("/sample-receiving", sampleReceivingH.Create)
+		group.GET("/sample-receiving/:id", sampleReceivingH.Get)
+		group.PUT("/sample-receiving/:id", sampleReceivingH.Update)
+		group.DELETE("/sample-receiving/:id", sampleReceivingH.Delete)
+		group.POST("/sample-receiving/:id/approve", sampleReceivingH.Approve)
+		group.POST("/sample-receiving/:id/reject", sampleReceivingH.Reject)
+
+		// Task Assign (Node 7: 任务分配)
+		group.GET("/task-assign", taskAssignH.List)
+		group.POST("/task-assign", taskAssignH.Create)
+		group.GET("/task-assign/:id", taskAssignH.Get)
+		group.PUT("/task-assign/:id", taskAssignH.Update)
+		group.DELETE("/task-assign/:id", taskAssignH.Delete)
+		group.POST("/task-assign/:id/approve", taskAssignH.Approve)
+		group.POST("/task-assign/:id/reject", taskAssignH.Reject)
+
+		// Data Entry (Node 8: 数据录入)
+		group.GET("/data-entry", dataEntryH.List)
+		group.POST("/data-entry", dataEntryH.Create)
+		group.GET("/data-entry/:id", dataEntryH.Get)
+		group.PUT("/data-entry/:id", dataEntryH.Update)
+		group.DELETE("/data-entry/:id", dataEntryH.Delete)
+		group.POST("/data-entry/:id/approve", dataEntryH.Approve)
+		group.POST("/data-entry/:id/reject", dataEntryH.Reject)
+
+		// Data Review (Node 9: 数据复核)
+		group.GET("/data-review", dataReviewH.List)
+		group.POST("/data-review", dataReviewH.Create)
+		group.GET("/data-review/:id", dataReviewH.Get)
+		group.PUT("/data-review/:id", dataReviewH.Update)
+		group.DELETE("/data-review/:id", dataReviewH.Delete)
+		group.POST("/data-review/:id/approve", dataReviewH.Approve)
+		group.POST("/data-review/:id/reject", dataReviewH.Reject)
+
+		// Data Audit (Node 10: 数据审核)
+		group.GET("/data-audit", dataAuditH.List)
+		group.POST("/data-audit", dataAuditH.Create)
+		group.GET("/data-audit/:id", dataAuditH.Get)
+		group.PUT("/data-audit/:id", dataAuditH.Update)
+		group.DELETE("/data-audit/:id", dataAuditH.Delete)
+		group.POST("/data-audit/:id/approve", dataAuditH.Approve)
+		group.POST("/data-audit/:id/reject", dataAuditH.Reject)
+
+		// Report Prepare (Node 11: 报告编制)
+		group.GET("/report-prepare", reportPrepareH.List)
+		group.POST("/report-prepare", reportPrepareH.Create)
+		group.GET("/report-prepare/:id", reportPrepareH.Get)
+		group.PUT("/report-prepare/:id", reportPrepareH.Update)
+		group.DELETE("/report-prepare/:id", reportPrepareH.Delete)
+		group.POST("/report-prepare/:id/approve", reportPrepareH.Approve)
+		group.POST("/report-prepare/:id/reject", reportPrepareH.Reject)
+
+		// Report Review (Node 12: 报告复核)
+		group.GET("/report-review", reportReviewH.List)
+		group.POST("/report-review", reportReviewH.Create)
+		group.GET("/report-review/:id", reportReviewH.Get)
+		group.PUT("/report-review/:id", reportReviewH.Update)
+		group.DELETE("/report-review/:id", reportReviewH.Delete)
+		group.POST("/report-review/:id/approve", reportReviewH.Approve)
+		group.POST("/report-review/:id/reject", reportReviewH.Reject)
+
+		// Report Audit (Node 13: 报告审核)
+		group.GET("/report-audit", reportAuditH.List)
+		group.POST("/report-audit", reportAuditH.Create)
+		group.GET("/report-audit/:id", reportAuditH.Get)
+		group.PUT("/report-audit/:id", reportAuditH.Update)
+		group.DELETE("/report-audit/:id", reportAuditH.Delete)
+		group.POST("/report-audit/:id/approve", reportAuditH.Approve)
+		group.POST("/report-audit/:id/reject", reportAuditH.Reject)
+	}
+}

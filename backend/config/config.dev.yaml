@@ -1,0 +1,27 @@
+env: "development"
+
+server:
+  port: 8080
+
+database:
+  host: localhost
+  port: 5432
+  user: lims
+  password: lims123
+  dbname: lims
+  sslmode: disable
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime: 30
+
+jwt:
+  secret: lims-jwt-secret-dev
+  expire_hour: 24
+  issuer: lims-system
+
+minio:
+  endpoint: localhost:9000
+  access_key: lims
+  secret_key: lims123
+  bucket_name: lims-files
+  use_ssl: false
