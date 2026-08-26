@@ -124,6 +124,18 @@
           <el-icon><Finished /></el-icon>
           <template #title>报告审核</template>
         </el-menu-item>
+        <el-menu-item index="/business/report-sign">
+          <el-icon><Stamp /></el-icon>
+          <template #title>报告签发</template>
+        </el-menu-item>
+        <el-menu-item index="/business/report-print">
+          <el-icon><Printer /></el-icon>
+          <template #title>报告打印发放</template>
+        </el-menu-item>
+        <el-menu-item index="/business/project-archive">
+          <el-icon><FolderOpened /></el-icon>
+          <template #title>项目归档</template>
+        </el-menu-item>
       </el-sub-menu>
     </el-menu>
   </div>
@@ -132,7 +144,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Odometer, Setting, User, Organization, Key, FolderOpened, List, Document, Monitor, Box, TrendCharts, Bell, Edit, DataAnalysis, Calendar, Location, UserFilled, EditPen, Search, Finished } from '@element-plus/icons-vue'
+import { Odometer, Setting, User, Organization, Key, FolderOpened, List, Document, Monitor, Box, TrendCharts, Bell, Edit, DataAnalysis, Calendar, Location, UserFilled, EditPen, Search, Finished, Stamp, Printer } from '@element-plus/icons-vue'
 
 const props = withDefaults(defineProps<{ collapsed: boolean }>(), {
   collapsed: false,

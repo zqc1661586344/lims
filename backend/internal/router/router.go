@@ -91,5 +91,8 @@ func autoMigrate(db *gorm.DB) {
 		&model.ReportPrepare{},
 		&model.ReportReview{},
 		&model.ReportAudit{},
+		&model.ReportSign{},
+		&model.ReportPrint{},
+		&model.ProjectArchive{},
 	)
 }

@@ -592,6 +592,171 @@ export function rejectReportAudit(id: number, data: {
   return request.post(`/business/report-audit/${id}/reject`, data)
 }
 
+/* ---- ReportSign (报告签发, Node 14) ---- */
+export interface ReportSign {
+  id: number
+  task_order_id: number
+  sign_result: string
+  sign_comment: string
+  signer_name: string
+  sign_date: string
+  sign_stamp: string
+  created_at: string
+  updated_at: string
+}
+
+export function getReportSignList(params?: { task_order_id?: string }) {
+  return request.get('/business/report-sign', { params })
+}
+export function getReportSign(id: number) {
+  return request.get(`/business/report-sign/${id}`)
+}
+export function createReportSign(data: {
+  task_order_id: number
+  sign_result?: string
+  sign_comment?: string
+  signer_name?: string
+  sign_date?: string
+  sign_stamp?: string
+}) {
+  return request.post('/business/report-sign', data)
+}
+export function updateReportSign(id: number, data: Partial<ReportSign>) {
+  return request.put(`/business/report-sign/${id}`, data)
+}
+export function deleteReportSign(id: number) {
+  return request.delete(`/business/report-sign/${id}`)
+}
+export function approveReportSign(id: number, data: {
+  task_id: number
+  sign_result?: string
+  sign_comment?: string
+  signer_name?: string
+  sign_date?: string
+  sign_stamp?: string
+}) {
+  return request.post(`/business/report-sign/${id}/approve`, data)
+}
+export function rejectReportSign(id: number, data: {
+  task_id: number
+  comment: string
+}) {
+  return request.post(`/business/report-sign/${id}/reject`, data)
+}
+
+/* ---- ReportPrint (报告打印发放, Node 15) ---- */
+export interface ReportPrint {
+  id: number
+  task_order_id: number
+  print_count: number
+  print_result: string
+  print_comment: string
+  recipient_name: string
+  recipient_date: string
+  delivery_method: string
+  tracking_no: string
+  created_at: string
+  updated_at: string
+}
+
+export function getReportPrintList(params?: { task_order_id?: string }) {
+  return request.get('/business/report-print', { params })
+}
+export function getReportPrint(id: number) {
+  return request.get(`/business/report-print/${id}`)
+}
+export function createReportPrint(data: {
+  task_order_id: number
+  print_count?: number
+  print_result?: string
+  print_comment?: string
+  recipient_name?: string
+  recipient_date?: string
+  delivery_method?: string
+  tracking_no?: string
+}) {
+  return request.post('/business/report-print', data)
+}
+export function updateReportPrint(id: number, data: Partial<ReportPrint>) {
+  return request.put(`/business/report-print/${id}`, data)
+}
+export function deleteReportPrint(id: number) {
+  return request.delete(`/business/report-print/${id}`)
+}
+export function approveReportPrint(id: number, data: {
+  task_id: number
+  print_count?: number
+  print_result?: string
+  print_comment?: string
+  recipient_name?: string
+  recipient_date?: string
+  delivery_method?: string
+  tracking_no?: string
+}) {
+  return request.post(`/business/report-print/${id}/approve`, data)
+}
+export function rejectReportPrint(id: number, data: {
+  task_id: number
+  comment: string
+}) {
+  return request.post(`/business/report-print/${id}/reject`, data)
+}
+
+/* ---- ProjectArchive (项目归档, Node 16) ---- */
+export interface ProjectArchive {
+  id: number
+  task_order_id: number
+  archive_no: string
+  archive_location: string
+  archive_date: string
+  archive_files: string
+  archive_comment: string
+  retention_period: number
+  created_at: string
+  updated_at: string
+}
+
+export function getProjectArchiveList(params?: { task_order_id?: string }) {
+  return request.get('/business/project-archive', { params })
+}
+export function getProjectArchive(id: number) {
+  return request.get(`/business/project-archive/${id}`)
+}
+export function createProjectArchive(data: {
+  task_order_id: number
+  archive_no?: string
+  archive_location?: string
+  archive_date?: string
+  archive_files?: string
+  archive_comment?: string
+  retention_period?: number
+}) {
+  return request.post('/business/project-archive', data)
+}
+export function updateProjectArchive(id: number, data: Partial<ProjectArchive>) {
+  return request.put(`/business/project-archive/${id}`, data)
+}
+export function deleteProjectArchive(id: number) {
+  return request.delete(`/business/project-archive/${id}`)
+}
+export function approveProjectArchive(id: number, data: {
+  task_id: number
+  archive_no?: string
+  archive_location?: string
+  archive_date?: string
+  archive_files?: string
+  archive_comment?: string
+  retention_period?: number
+}) {
+  return request.post(`/business/project-archive/${id}/approve`, data)
+}
+export function rejectProjectArchive(id: number, data: {
+  task_id: number
+  comment: string
+}) {
+  return request.post(`/business/project-archive/${id}/reject`, data)
+}
+
 /* ---- Workflow integration helpers ---- */
 export interface PendingTask {
   id: number

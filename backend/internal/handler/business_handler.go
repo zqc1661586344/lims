@@ -6,6 +6,7 @@ import (
 	"lims-backend/internal/model"
 	"lims-backend/internal/service"
 	"lims-backend/internal/utils"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -2350,4 +2351,618 @@ func (h *ReportAuditHandler) Reject(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"message": "报告审核已驳回"})
+}
+
+// ============================================================
+// ReportSignHandler — 报告签发（节点14）
+// ============================================================
+
+type ReportSignHandler struct {
+	svc *service.BusinessService
+	db  *gorm.DB
+}
+
+func NewReportSignHandler(db *gorm.DB) *ReportSignHandler {
+	return &ReportSignHandler{
+		svc: service.NewBusinessService(db),
+		db:  db,
+	}
+}
+
+func (h *ReportSignHandler) getDB(c *gin.Context) *gorm.DB {
+	if db := middleware.GetDB(c); db != nil {
+		return db
+	}
+	return h.db
+}
+
+func (h *ReportSignHandler) List(c *gin.Context) {
+	var items []model.ReportSign
+	query := h.getDB(c).Order("id DESC")
+	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
+		query = query.Where("task_order_id = ?", taskOrderID)
+	}
+	if err := query.Find(&items).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("查询报告签发失败: %v", err))
+		return
+	}
+	utils.Success(c, items)
+}
+
+func (h *ReportSignHandler) Get(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	var item model.ReportSign
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "报告签发记录不存在")
+		return
+	}
+	utils.Success(c, item)
+}
+
+func (h *ReportSignHandler) Create(c *gin.Context) {
+	var req struct {
+		TaskOrderID uint       `json:"task_order_id" binding:"required"`
+		SignResult  string     `json:"sign_result"`
+		SignComment string     `json:"sign_comment"`
+		SignerName  string     `json:"signer_name"`
+		SignDate    *time.Time `json:"sign_date"`
+		SignStamp   string     `json:"sign_stamp"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	item := model.ReportSign{
+		TaskOrderID: req.TaskOrderID,
+		SignResult:  req.SignResult,
+		SignComment: req.SignComment,
+		SignerName:  req.SignerName,
+		SignDate:    req.SignDate,
+		SignStamp:   req.SignStamp,
+	}
+	if err := h.getDB(c).Create(&item).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("创建报告签发失败: %v", err))
+		return
+	}
+	utils.Created(c, item)
+}
+
+func (h *ReportSignHandler) Update(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	var item model.ReportSign
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "报告签发记录不存在")
+		return
+	}
+	var req struct {
+		SignResult  string     `json:"sign_result"`
+		SignComment string     `json:"sign_comment"`
+		SignerName  string     `json:"signer_name"`
+		SignDate    *time.Time `json:"sign_date"`
+		SignStamp   string     `json:"sign_stamp"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	updates := map[string]interface{}{}
+	if req.SignResult != "" {
+		updates["sign_result"] = req.SignResult
+	}
+	if req.SignComment != "" {
+		updates["sign_comment"] = req.SignComment
+	}
+	if req.SignerName != "" {
+		updates["signer_name"] = req.SignerName
+	}
+	if req.SignDate != nil {
+		updates["sign_date"] = req.SignDate
+	}
+	if req.SignStamp != "" {
+		updates["sign_stamp"] = req.SignStamp
+	}
+	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("更新报告签发失败: %v", err))
+		return
+	}
+	h.getDB(c).First(&item, id)
+	utils.Success(c, item)
+}
+
+func (h *ReportSignHandler) Delete(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	if err := h.getDB(c).Delete(&model.ReportSign{}, id).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("删除报告签发失败: %v", err))
+		return
+	}
+	utils.Success(c, nil)
+}
+
+func (h *ReportSignHandler) Approve(c *gin.Context) {
+	var req struct {
+		TaskID      uint       `json:"task_id" binding:"required"`
+		SignResult  string     `json:"sign_result"`
+		SignComment string     `json:"sign_comment"`
+		SignerName  string     `json:"signer_name"`
+		SignDate    *time.Time `json:"sign_date"`
+		SignStamp   string     `json:"sign_stamp"`
+		Comment     string     `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	rec := model.ReportSign{
+		TaskOrderID: req.TaskID,
+		SignResult:  "通过",
+		SignComment: req.SignComment,
+		SignerName:  req.SignerName,
+		SignDate:    req.SignDate,
+		SignStamp:   req.SignStamp,
+	}
+	if req.SignResult != "" {
+		rec.SignResult = req.SignResult
+	}
+	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+
+	userID := middleware.GetUserID(c)
+	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+		return
+	}
+	utils.Success(c, gin.H{"message": "报告签发通过"})
+}
+
+func (h *ReportSignHandler) Reject(c *gin.Context) {
+	var req struct {
+		TaskID      uint   `json:"task_id" binding:"required"`
+		SignComment string `json:"sign_comment" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	rec := model.ReportSign{
+		TaskOrderID: req.TaskID,
+		SignResult:  "驳回",
+		SignComment: req.SignComment,
+	}
+	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+
+	userID := middleware.GetUserID(c)
+	if err := h.svc.RejectTask(req.TaskID, userID, req.SignComment); err != nil {
+		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+		return
+	}
+	utils.Success(c, gin.H{"message": "报告签发已驳回"})
+}
+
+// ============================================================
+// ReportPrintHandler — 报告打印发放（节点15）
+// ============================================================
+
+type ReportPrintHandler struct {
+	svc *service.BusinessService
+	db  *gorm.DB
+}
+
+func NewReportPrintHandler(db *gorm.DB) *ReportPrintHandler {
+	return &ReportPrintHandler{
+		svc: service.NewBusinessService(db),
+		db:  db,
+	}
+}
+
+func (h *ReportPrintHandler) getDB(c *gin.Context) *gorm.DB {
+	if db := middleware.GetDB(c); db != nil {
+		return db
+	}
+	return h.db
+}
+
+func (h *ReportPrintHandler) List(c *gin.Context) {
+	var items []model.ReportPrint
+	query := h.getDB(c).Order("id DESC")
+	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
+		query = query.Where("task_order_id = ?", taskOrderID)
+	}
+	if err := query.Find(&items).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("查询报告打印发放失败: %v", err))
+		return
+	}
+	utils.Success(c, items)
+}
+
+func (h *ReportPrintHandler) Get(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	var item model.ReportPrint
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "报告打印发放记录不存在")
+		return
+	}
+	utils.Success(c, item)
+}
+
+func (h *ReportPrintHandler) Create(c *gin.Context) {
+	var req struct {
+		TaskOrderID    uint       `json:"task_order_id" binding:"required"`
+		PrintCount     int        `json:"print_count"`
+		PrintResult    string     `json:"print_result"`
+		PrintComment   string     `json:"print_comment"`
+		RecipientName  string     `json:"recipient_name"`
+		RecipientDate  *time.Time `json:"recipient_date"`
+		DeliveryMethod string     `json:"delivery_method"`
+		TrackingNo     string     `json:"tracking_no"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	item := model.ReportPrint{
+		TaskOrderID:    req.TaskOrderID,
+		PrintCount:     req.PrintCount,
+		PrintResult:    req.PrintResult,
+		PrintComment:   req.PrintComment,
+		RecipientName:  req.RecipientName,
+		RecipientDate:  req.RecipientDate,
+		DeliveryMethod: req.DeliveryMethod,
+		TrackingNo:     req.TrackingNo,
+	}
+	if err := h.getDB(c).Create(&item).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("创建报告打印发放失败: %v", err))
+		return
+	}
+	utils.Created(c, item)
+}
+
+func (h *ReportPrintHandler) Update(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	var item model.ReportPrint
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "报告打印发放记录不存在")
+		return
+	}
+	var req struct {
+		PrintCount     int        `json:"print_count"`
+		PrintResult    string     `json:"print_result"`
+		PrintComment   string     `json:"print_comment"`
+		RecipientName  string     `json:"recipient_name"`
+		RecipientDate  *time.Time `json:"recipient_date"`
+		DeliveryMethod string     `json:"delivery_method"`
+		TrackingNo     string     `json:"tracking_no"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	updates := map[string]interface{}{}
+	if req.PrintCount > 0 {
+		updates["print_count"] = req.PrintCount
+	}
+	if req.PrintResult != "" {
+		updates["print_result"] = req.PrintResult
+	}
+	if req.PrintComment != "" {
+		updates["print_comment"] = req.PrintComment
+	}
+	if req.RecipientName != "" {
+		updates["recipient_name"] = req.RecipientName
+	}
+	if req.RecipientDate != nil {
+		updates["recipient_date"] = req.RecipientDate
+	}
+	if req.DeliveryMethod != "" {
+		updates["delivery_method"] = req.DeliveryMethod
+	}
+	if req.TrackingNo != "" {
+		updates["tracking_no"] = req.TrackingNo
+	}
+	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("更新报告打印发放失败: %v", err))
+		return
+	}
+	h.getDB(c).First(&item, id)
+	utils.Success(c, item)
+}
+
+func (h *ReportPrintHandler) Delete(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	if err := h.getDB(c).Delete(&model.ReportPrint{}, id).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("删除报告打印发放失败: %v", err))
+		return
+	}
+	utils.Success(c, nil)
+}
+
+func (h *ReportPrintHandler) Approve(c *gin.Context) {
+	var req struct {
+		TaskID         uint       `json:"task_id" binding:"required"`
+		PrintCount     int        `json:"print_count"`
+		PrintResult    string     `json:"print_result"`
+		PrintComment   string     `json:"print_comment"`
+		RecipientName  string     `json:"recipient_name"`
+		RecipientDate  *time.Time `json:"recipient_date"`
+		DeliveryMethod string     `json:"delivery_method"`
+		TrackingNo     string     `json:"tracking_no"`
+		Comment        string     `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	rec := model.ReportPrint{
+		TaskOrderID:    req.TaskID,
+		PrintCount:     req.PrintCount,
+		PrintResult:    "通过",
+		PrintComment:   req.PrintComment,
+		RecipientName:  req.RecipientName,
+		RecipientDate:  req.RecipientDate,
+		DeliveryMethod: req.DeliveryMethod,
+		TrackingNo:     req.TrackingNo,
+	}
+	if req.PrintResult != "" {
+		rec.PrintResult = req.PrintResult
+	}
+	if rec.PrintCount == 0 {
+		rec.PrintCount = 1
+	}
+	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+
+	userID := middleware.GetUserID(c)
+	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+		return
+	}
+	utils.Success(c, gin.H{"message": "报告打印发放通过"})
+}
+
+func (h *ReportPrintHandler) Reject(c *gin.Context) {
+	var req struct {
+		TaskID       uint   `json:"task_id" binding:"required"`
+		PrintComment string `json:"print_comment" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	rec := model.ReportPrint{
+		TaskOrderID:  req.TaskID,
+		PrintResult:  "驳回",
+		PrintComment: req.PrintComment,
+	}
+	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+
+	userID := middleware.GetUserID(c)
+	if err := h.svc.RejectTask(req.TaskID, userID, req.PrintComment); err != nil {
+		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+		return
+	}
+	utils.Success(c, gin.H{"message": "报告打印发放已驳回"})
+}
+
+// ============================================================
+// ProjectArchiveHandler — 项目归档（节点16，终节点）
+// ============================================================
+
+type ProjectArchiveHandler struct {
+	svc *service.BusinessService
+	db  *gorm.DB
+}
+
+func NewProjectArchiveHandler(db *gorm.DB) *ProjectArchiveHandler {
+	return &ProjectArchiveHandler{
+		svc: service.NewBusinessService(db),
+		db:  db,
+	}
+}
+
+func (h *ProjectArchiveHandler) getDB(c *gin.Context) *gorm.DB {
+	if db := middleware.GetDB(c); db != nil {
+		return db
+	}
+	return h.db
+}
+
+func (h *ProjectArchiveHandler) List(c *gin.Context) {
+	var items []model.ProjectArchive
+	query := h.getDB(c).Order("id DESC")
+	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
+		query = query.Where("task_order_id = ?", taskOrderID)
+	}
+	if err := query.Find(&items).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("查询项目归档失败: %v", err))
+		return
+	}
+	utils.Success(c, items)
+}
+
+func (h *ProjectArchiveHandler) Get(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	var item model.ProjectArchive
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "项目归档记录不存在")
+		return
+	}
+	utils.Success(c, item)
+}
+
+func (h *ProjectArchiveHandler) Create(c *gin.Context) {
+	var req struct {
+		TaskOrderID     uint       `json:"task_order_id" binding:"required"`
+		ArchiveNo       string     `json:"archive_no"`
+		ArchiveLocation string     `json:"archive_location"`
+		ArchiveDate     *time.Time `json:"archive_date"`
+		ArchiveFiles    string     `json:"archive_files"`
+		ArchiveComment  string     `json:"archive_comment"`
+		RetentionPeriod int        `json:"retention_period"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	item := model.ProjectArchive{
+		TaskOrderID:     req.TaskOrderID,
+		ArchiveNo:       req.ArchiveNo,
+		ArchiveLocation: req.ArchiveLocation,
+		ArchiveDate:     req.ArchiveDate,
+		ArchiveFiles:    req.ArchiveFiles,
+		ArchiveComment:  req.ArchiveComment,
+		RetentionPeriod: req.RetentionPeriod,
+	}
+	if err := h.getDB(c).Create(&item).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("创建项目归档失败: %v", err))
+		return
+	}
+	utils.Created(c, item)
+}
+
+func (h *ProjectArchiveHandler) Update(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	var item model.ProjectArchive
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "项目归档记录不存在")
+		return
+	}
+	var req struct {
+		ArchiveNo       string     `json:"archive_no"`
+		ArchiveLocation string     `json:"archive_location"`
+		ArchiveDate     *time.Time `json:"archive_date"`
+		ArchiveFiles    string     `json:"archive_files"`
+		ArchiveComment  string     `json:"archive_comment"`
+		RetentionPeriod int        `json:"retention_period"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	updates := map[string]interface{}{}
+	if req.ArchiveNo != "" {
+		updates["archive_no"] = req.ArchiveNo
+	}
+	if req.ArchiveLocation != "" {
+		updates["archive_location"] = req.ArchiveLocation
+	}
+	if req.ArchiveDate != nil {
+		updates["archive_date"] = req.ArchiveDate
+	}
+	if req.ArchiveFiles != "" {
+		updates["archive_files"] = req.ArchiveFiles
+	}
+	if req.ArchiveComment != "" {
+		updates["archive_comment"] = req.ArchiveComment
+	}
+	if req.RetentionPeriod > 0 {
+		updates["retention_period"] = req.RetentionPeriod
+	}
+	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("更新项目归档失败: %v", err))
+		return
+	}
+	h.getDB(c).First(&item, id)
+	utils.Success(c, item)
+}
+
+func (h *ProjectArchiveHandler) Delete(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	if err := h.getDB(c).Delete(&model.ProjectArchive{}, id).Error; err != nil {
+		utils.InternalError(c, fmt.Sprintf("删除项目归档失败: %v", err))
+		return
+	}
+	utils.Success(c, nil)
+}
+
+func (h *ProjectArchiveHandler) Approve(c *gin.Context) {
+	var req struct {
+		TaskID          uint       `json:"task_id" binding:"required"`
+		ArchiveNo       string     `json:"archive_no"`
+		ArchiveLocation string     `json:"archive_location"`
+		ArchiveDate     *time.Time `json:"archive_date"`
+		ArchiveFiles    string     `json:"archive_files"`
+		ArchiveComment  string     `json:"archive_comment"`
+		RetentionPeriod int        `json:"retention_period"`
+		Comment         string     `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	rec := model.ProjectArchive{
+		TaskOrderID:     req.TaskID,
+		ArchiveNo:       req.ArchiveNo,
+		ArchiveLocation: req.ArchiveLocation,
+		ArchiveDate:     req.ArchiveDate,
+		ArchiveFiles:    req.ArchiveFiles,
+		ArchiveComment:  req.ArchiveComment,
+		RetentionPeriod: req.RetentionPeriod,
+	}
+	if rec.RetentionPeriod == 0 {
+		rec.RetentionPeriod = 36
+	}
+	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+
+	userID := middleware.GetUserID(c)
+	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+		return
+	}
+	utils.Success(c, gin.H{"message": "项目归档通过"})
+}
+
+func (h *ProjectArchiveHandler) Reject(c *gin.Context) {
+	var req struct {
+		TaskID         uint   `json:"task_id" binding:"required"`
+		ArchiveComment string `json:"archive_comment" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
+		return
+	}
+	rec := model.ProjectArchive{
+		TaskOrderID:    req.TaskID,
+		ArchiveComment: req.ArchiveComment,
+	}
+	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+
+	userID := middleware.GetUserID(c)
+	if err := h.svc.RejectTask(req.TaskID, userID, req.ArchiveComment); err != nil {
+		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+		return
+	}
+	utils.Success(c, gin.H{"message": "项目归档已驳回"})
 }

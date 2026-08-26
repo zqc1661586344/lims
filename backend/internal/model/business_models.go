@@ -173,3 +173,51 @@ type ReportAudit struct {
 }
 
 func (ReportAudit) TableName() string { return "report_audits" }
+
+// ReportSign 报告签发（节点14）
+type ReportSign struct {
+	ID           uint      `gorm:"primarykey" json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	TaskOrderID  uint      `gorm:"uniqueIndex;not null" json:"task_order_id"`
+	SignResult   string    `gorm:"size:20;not null" json:"sign_result"`    // 通过/驳回
+	SignComment  string    `gorm:"type:text" json:"sign_comment"`
+	SignerName   string    `gorm:"size:100" json:"signer_name"`            // 签发人姓名
+	SignDate     *time.Time `json:"sign_date"`                             // 签发日期
+	SignStamp    string    `gorm:"size:500" json:"sign_stamp"`             // 签发印章文件路径
+}
+
+func (ReportSign) TableName() string { return "report_signs" }
+
+// ReportPrint 报告打印发放（节点15）
+type ReportPrint struct {
+	ID            uint      `gorm:"primarykey" json:"id"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	TaskOrderID   uint      `gorm:"uniqueIndex;not null" json:"task_order_id"`
+	PrintCount    int       `gorm:"default:1" json:"print_count"`          // 打印份数
+	PrintResult   string    `gorm:"size:20;not null" json:"print_result"`  // 通过/驳回
+	PrintComment  string    `gorm:"type:text" json:"print_comment"`
+	RecipientName string    `gorm:"size:100" json:"recipient_name"`        // 领取人姓名
+	RecipientDate *time.Time `json:"recipient_date"`                       // 领取日期
+	DeliveryMethod string   `gorm:"size:50" json:"delivery_method"`       // 领取方式：自取/邮寄
+	TrackingNo    string    `gorm:"size:100" json:"tracking_no"`          // 快递单号（邮寄时）
+}
+
+func (ReportPrint) TableName() string { return "report_prints" }
+
+// ProjectArchive 项目归档（节点16，终节点）
+type ProjectArchive struct {
+	ID              uint      `gorm:"primarykey" json:"id"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	TaskOrderID     uint      `gorm:"uniqueIndex;not null" json:"task_order_id"`
+	ArchiveNo       string    `gorm:"size:100;uniqueIndex" json:"archive_no"`      // 归档编号
+	ArchiveLocation string    `gorm:"size:200" json:"archive_location"`            // 归档位置
+	ArchiveDate     *time.Time `json:"archive_date"`                               // 归档日期
+	ArchiveFiles    string    `gorm:"type:jsonb" json:"archive_files"`             // JSON: [{name, type, path}]
+	ArchiveComment  string    `gorm:"type:text" json:"archive_comment"`
+	RetentionPeriod int       `gorm:"default:36" json:"retention_period"`          // 保存期限（月）
+}
+
+func (ProjectArchive) TableName() string { return "project_archives" }

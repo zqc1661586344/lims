@@ -146,6 +146,24 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/business/reportAudit/index.vue'),
         meta: { title: '报告审核', icon: 'Finished' },
       },
+      {
+        path: 'business/report-sign',
+        name: 'ReportSign',
+        component: () => import('@/views/business/reportSign/index.vue'),
+        meta: { title: '报告签发', icon: 'Stamp' },
+      },
+      {
+        path: 'business/report-print',
+        name: 'ReportPrint',
+        component: () => import('@/views/business/reportPrint/index.vue'),
+        meta: { title: '报告打印发放', icon: 'Printer' },
+      },
+      {
+        path: 'business/project-archive',
+        name: 'ProjectArchive',
+        component: () => import('@/views/business/projectArchive/index.vue'),
+        meta: { title: '项目归档', icon: 'FolderOpened' },
+      },
     ],
   },
 ]
