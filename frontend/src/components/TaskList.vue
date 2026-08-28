@@ -3,7 +3,7 @@
     <template #header>
       <div class="card-header">
         <span>{{ title }}</span>
-        <el-tag v-if="tasks.length" type="info" size="small">{{ tasks.length }} 项</el-tag>
+        <el-tag v-if="!!tasks?.length" type="info" size="small">{{ tasks.length }} 项</el-tag>
       </div>
     </template>
 

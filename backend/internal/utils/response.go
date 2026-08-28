@@ -2,6 +2,7 @@ package utils
 
 import (
 	"net/http"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,12 +14,13 @@ type Response struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
-// Success returns a successful response.
+// Success returns a successful response, converting nil slices/maps to [] so
+// the JSON payload is [] instead of null (avoids frontend .length crashes).
 func Success(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, Response{
 		Code:    0,
 		Message: "success",
-		Data:    data,
+		Data:    normalizeData(data),
 	})
 }
 
@@ -27,7 +29,7 @@ func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 	c.JSON(http.StatusOK, Response{
 		Code:    0,
 		Message: message,
-		Data:    data,
+		Data:    normalizeData(data),
 	})
 }
 
@@ -36,8 +38,24 @@ func Created(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusCreated, Response{
 		Code:    0,
 		Message: "created",
-		Data:    data,
+		Data:    normalizeData(data),
 	})
+}
+
+// normalizeData converts a nil slice/map into its empty (non-nil) form so
+// that JSON encoding yields []/{} instead of null.
+func normalizeData(data interface{}) interface{} {
+	if data == nil {
+		return []interface{}{}
+	}
+	v := reflect.ValueOf(data)
+	switch v.Kind() {
+	case reflect.Slice, reflect.Map:
+		if v.IsNil() {
+			return []interface{}{}
+		}
+	}
+	return data
 }
 
 // Error returns an error response.
