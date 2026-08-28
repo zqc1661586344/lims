@@ -140,6 +140,8 @@ type ReportPrepare struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	TaskOrderID    uint      `gorm:"uniqueIndex;not null" json:"task_order_id"`
+	ReportNo       string    `gorm:"size:100" json:"report_no"`             // 报告编号（编制阶段赋号，后续环节沿用）
+	PrepareOpinion string    `gorm:"type:text" json:"prepare_opinion"`      // 编制意见（签发单 D15 汇聚 D9 时承接）
 	ReportTitle    string    `gorm:"size:200;not null" json:"report_title"`
 	ReportContent  string    `gorm:"type:jsonb" json:"report_content"`    // JSON: 报告内容
 	ReportFile     string    `gorm:"size:500" json:"report_file"`         // 报告文件路径
@@ -175,16 +177,23 @@ type ReportAudit struct {
 func (ReportAudit) TableName() string { return "report_audits" }
 
 // ReportSign 报告签发（节点14）
+// 该环节产出"报告审核签发单"（流程图 D15），汇聚报告编号、编制/复核/审核意见及签发信息。
 type ReportSign struct {
-	ID           uint      `gorm:"primarykey" json:"id"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	TaskOrderID  uint      `gorm:"uniqueIndex;not null" json:"task_order_id"`
-	SignResult   string    `gorm:"size:20;not null" json:"sign_result"`    // 通过/驳回
-	SignComment  string    `gorm:"type:text" json:"sign_comment"`
-	SignerName   string    `gorm:"size:100" json:"signer_name"`            // 签发人姓名
-	SignDate     *time.Time `json:"sign_date"`                             // 签发日期
-	SignStamp    string    `gorm:"size:500" json:"sign_stamp"`             // 签发印章文件路径
+	ID              uint       `gorm:"primarykey" json:"id"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	TaskOrderID     uint       `gorm:"uniqueIndex;not null" json:"task_order_id"`
+	ReportNo        string     `gorm:"size:100" json:"report_no"`          // 报告编号
+	ReportTitle     string     `gorm:"size:200" json:"report_title"`        // 报告标题（承接报告编制）
+	PrepareOpinion  string     `gorm:"type:text" json:"prepare_opinion"`    // 编制环节意见（签发单 D15 汇聚 D9）
+	ReviewOpinion   string     `gorm:"type:text" json:"review_opinion"`     // 复核环节意见（签发单 D15 汇聚 D10）
+	AuditOpinion    string     `gorm:"type:text" json:"audit_opinion"`      // 审核环节意见（签发单 D15 汇聚 D11）
+	RawRecords      string     `gorm:"type:jsonb" json:"raw_records"`       // 实验原始记录（签发单 D15 汇聚 D12，JSON: [{test_item_id, original_data}])
+	SignResult      string     `gorm:"size:20;not null" json:"sign_result"` // 通过/驳回
+	SignComment     string     `gorm:"type:text" json:"sign_comment"`
+	SignerName      string     `gorm:"size:100" json:"signer_name"`         // 签发人姓名
+	SignDate        *time.Time `json:"sign_date"`                           // 签发日期
+	SignStamp       string     `gorm:"size:500" json:"sign_stamp"`          // 签发印章文件路径
 }
 
 func (ReportSign) TableName() string { return "report_signs" }

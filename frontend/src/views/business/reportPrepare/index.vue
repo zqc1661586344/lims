@@ -13,6 +13,7 @@
 
       <el-table :data="items" stripe v-loading="loading">
         <el-table-column prop="task_order_id" label="委托ID" width="80" />
+        <el-table-column prop="report_no" label="报告编号" width="140" show-overflow-tooltip />
         <el-table-column prop="report_title" label="报告标题" min-width="180" show-overflow-tooltip />
         <el-table-column prop="report_file" label="报告文件" min-width="150" show-overflow-tooltip />
         <el-table-column prop="created_at" label="创建时间" width="170" />
@@ -31,6 +32,12 @@
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="120px">
         <el-form-item label="委托ID" prop="task_order_id">
           <el-input-number v-model="form.task_order_id" :min="1" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="报告编号">
+          <el-input v-model="form.report_no" placeholder="请输入报告编号" />
+        </el-form-item>
+        <el-form-item label="编制意见">
+          <el-input v-model="form.prepare_opinion" type="textarea" :rows="2" placeholder="请输入编制意见" />
         </el-form-item>
         <el-form-item label="报告标题" prop="report_title">
           <el-input v-model="form.report_title" placeholder="请输入报告标题" />
@@ -52,9 +59,15 @@
     </el-dialog>
 
     <!-- Approve dialog -->
-    <el-dialog v-model="approveVisible" title="报告编制 - 通过" width="500px">
+    <el-dialog v-model="approveVisible" title="报告编制 - 通过" width="560px">
       <el-form :model="approveForm" label-width="100px">
         <el-form-item label="委托ID">{{ approveForm.task_order_id }}</el-form-item>
+        <el-form-item label="报告编号">
+          <el-input v-model="approveForm.report_no" placeholder="请输入报告编号" />
+        </el-form-item>
+        <el-form-item label="编制意见">
+          <el-input v-model="approveForm.prepare_opinion" type="textarea" :rows="2" placeholder="请输入编制意见" />
+        </el-form-item>
         <el-form-item label="报告标题">
           <el-input v-model="approveForm.report_title" placeholder="请输入报告标题" />
         </el-form-item>
@@ -66,6 +79,16 @@
         </el-form-item>
         <el-form-item label="附件信息">
           <el-input v-model="approveForm.attachments" type="textarea" :rows="3" placeholder="JSON: [{name, url}]" />
+        </el-form-item>
+        <el-form-item label="实验原始记录">
+          <div class="raw-records-panel">
+            <el-table :data="rawEntries" size="small" border empty-text="暂无实验原始记录" max-height="180">
+              <el-table-column prop="id" label="ID" width="60" />
+              <el-table-column prop="test_item_id" label="检测项目ID" width="100" />
+              <el-table-column prop="original_data" label="原始数据" min-width="200" show-overflow-tooltip />
+              <el-table-column prop="created_at" label="录入时间" width="170" />
+            </el-table>
+          </div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="approveForm.comment" type="textarea" :rows="2" />
@@ -97,8 +120,8 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { getReportPrepareList, getReportPrepare, createReportPrepare, updateReportPrepare, deleteReportPrepare, approveReportPrepare, rejectReportPrepare } from '@/api/business'
-import type { ReportPrepare } from '@/api/business'
+import { getReportPrepareList, getReportPrepare, createReportPrepare, updateReportPrepare, deleteReportPrepare, approveReportPrepare, rejectReportPrepare, getDataEntryList } from '@/api/business'
+import type { ReportPrepare, DataEntry } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<ReportPrepare[]>([])
@@ -117,15 +140,15 @@ async function loadData() {
 }
 
 const formVisible = ref(false); const isEdit = ref(false); const formRef = ref<FormInstance>(); const saving = ref(false)
-const form = reactive({ id: 0, task_order_id: 0, report_title: '', report_content: '', report_file: '', attachments: '' })
+const form = reactive({ id: 0, task_order_id: 0, report_no: '', prepare_opinion: '', report_title: '', report_content: '', report_file: '', attachments: '' })
 const formRules: FormRules = { task_order_id: [{ required: true, message: '请输入委托ID', trigger: 'blur' }], report_title: [{ required: true, message: '请输入报告标题', trigger: 'blur' }] }
-function openCreate() { isEdit.value = false; form.id = 0; form.task_order_id = 0; form.report_title = ''; form.report_content = ''; form.report_file = ''; form.attachments = ''; formVisible.value = true }
-async function openEdit(row: ReportPrepare) { isEdit.value = true; const res = await getReportPrepare(row.id); const d = res.data; form.id = d.id; form.task_order_id = d.task_order_id; form.report_title = d.report_title; form.report_content = d.report_content; form.report_file = d.report_file; form.attachments = d.attachments; formVisible.value = true }
+function openCreate() { isEdit.value = false; form.id = 0; form.task_order_id = 0; form.report_no = ''; form.prepare_opinion = ''; form.report_title = ''; form.report_content = ''; form.report_file = ''; form.attachments = ''; formVisible.value = true }
+async function openEdit(row: ReportPrepare) { isEdit.value = true; const res = await getReportPrepare(row.id); const d = res.data; form.id = d.id; form.task_order_id = d.task_order_id; form.report_no = d.report_no; form.prepare_opinion = d.prepare_opinion; form.report_title = d.report_title; form.report_content = d.report_content; form.report_file = d.report_file; form.attachments = d.attachments; formVisible.value = true }
 async function handleSave() {
   const valid = await formRef.value?.validate().catch(() => false); if (!valid) return
   saving.value = true
   try {
-    const data = { task_order_id: form.task_order_id, report_title: form.report_title, report_content: form.report_content, report_file: form.report_file, attachments: form.attachments }
+    const data = { task_order_id: form.task_order_id, report_no: form.report_no, prepare_opinion: form.prepare_opinion, report_title: form.report_title, report_content: form.report_content, report_file: form.report_file, attachments: form.attachments }
     if (isEdit.value) { await updateReportPrepare(form.id, data); ElMessage.success('更新成功') }
     else { await createReportPrepare(data); ElMessage.success('创建成功') }
     formVisible.value = false; await loadData()
@@ -134,11 +157,22 @@ async function handleSave() {
 async function handleDelete(id: number) { await deleteReportPrepare(id); ElMessage.success('删除成功'); await loadData() }
 
 const approveVisible = ref(false); const approving = ref(false)
-const approveForm = reactive({ id: 0, task_order_id: 0, report_title: '', report_content: '', report_file: '', attachments: '', comment: '' })
-function openApprove(row: ReportPrepare) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.report_title = row.report_title; approveForm.report_content = row.report_content; approveForm.report_file = row.report_file; approveForm.attachments = row.attachments; approveForm.comment = ''; approveVisible.value = true }
+const rawEntries = ref<DataEntry[]>([])
+const approveForm = reactive({ id: 0, task_order_id: 0, report_no: '', prepare_opinion: '', report_title: '', report_content: '', report_file: '', attachments: '', comment: '' })
+function openApprove(row: ReportPrepare) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.report_no = row.report_no; approveForm.prepare_opinion = row.prepare_opinion; approveForm.report_title = row.report_title; approveForm.report_content = row.report_content; approveForm.report_file = row.report_file; approveForm.attachments = row.attachments; approveForm.comment = ''; approveVisible.value = true; loadRawRecords(row.task_order_id) }
+
+// 实验原始记录贯穿展示（流程图 D9 = 报告 + 实验原始记录）
+async function loadRawRecords(taskOrderId: number) {
+  rawEntries.value = []
+  if (!taskOrderId) return
+  try {
+    const dr = await getDataEntryList({ task_order_id: String(taskOrderId) })
+    rawEntries.value = (dr.data || []) as DataEntry[]
+  } catch { rawEntries.value = [] }
+}
 async function handleApprove() {
   approving.value = true
-  try { await approveReportPrepare(approveForm.id, { task_id: approveForm.task_order_id, report_title: approveForm.report_title, report_content: approveForm.report_content, report_file: approveForm.report_file, attachments: approveForm.attachments }); ElMessage.success('编制通过，流程已推进'); approveVisible.value = false; await loadData() }
+  try { await approveReportPrepare(approveForm.id, { task_id: approveForm.task_order_id, report_no: approveForm.report_no, prepare_opinion: approveForm.prepare_opinion, report_title: approveForm.report_title, report_content: approveForm.report_content, report_file: approveForm.report_file, attachments: approveForm.attachments }); ElMessage.success('编制通过，流程已推进'); approveVisible.value = false; await loadData() }
   catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
   finally { approving.value = false }
 }
@@ -155,3 +189,9 @@ async function handleReject() {
   finally { rejecting.value = false }
 }
 </script>
+
+<style scoped>
+.raw-records-panel {
+  width: 100%;
+}
+</style>

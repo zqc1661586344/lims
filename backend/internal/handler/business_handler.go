@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
@@ -1943,23 +1944,27 @@ func (h *ReportPrepareHandler) Delete(c *gin.Context) {
 
 func (h *ReportPrepareHandler) Approve(c *gin.Context) {
 	var req struct {
-		TaskID        uint   `json:"task_id" binding:"required"`
-		ReportTitle   string `json:"report_title"`
-		ReportContent string `json:"report_content"`
-		ReportFile    string `json:"report_file"`
-		Attachments   string `json:"attachments"`
-		Comment       string `json:"comment"`
+		TaskID         uint   `json:"task_id" binding:"required"`
+		ReportNo       string `json:"report_no"`
+		PrepareOpinion string `json:"prepare_opinion"`
+		ReportTitle    string `json:"report_title"`
+		ReportContent  string `json:"report_content"`
+		ReportFile     string `json:"report_file"`
+		Attachments    string `json:"attachments"`
+		Comment        string `json:"comment"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
 	rec := model.ReportPrepare{
-		TaskOrderID:   req.TaskID,
-		ReportTitle:   req.ReportTitle,
-		ReportContent: req.ReportContent,
-		ReportFile:    req.ReportFile,
-		Attachments:   req.Attachments,
+		TaskOrderID:    req.TaskID,
+		ReportNo:       req.ReportNo,
+		PrepareOpinion: req.PrepareOpinion,
+		ReportTitle:    req.ReportTitle,
+		ReportContent:  req.ReportContent,
+		ReportFile:     req.ReportFile,
+		Attachments:    req.Attachments,
 	}
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
@@ -2504,13 +2509,23 @@ func (h *ReportSignHandler) Approve(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
+
+	// 自动汇聚"报告审核签发单"（流程图 D15）：承接报告编制标题、编制/复核/审核意见及实验原始记录
+	reportNo, reportTitle, prepareOpinion, reviewOpinion, auditOpinion, rawRecords := h.aggregateSignSlip(c, req.TaskID)
+
 	rec := model.ReportSign{
-		TaskOrderID: req.TaskID,
-		SignResult:  "通过",
-		SignComment: req.SignComment,
-		SignerName:  req.SignerName,
-		SignDate:    req.SignDate,
-		SignStamp:   req.SignStamp,
+		TaskOrderID:    req.TaskID,
+		ReportNo:       reportNo,
+		ReportTitle:    reportTitle,
+		PrepareOpinion: prepareOpinion,
+		ReviewOpinion:  reviewOpinion,
+		AuditOpinion:   auditOpinion,
+		RawRecords:     rawRecords,
+		SignResult:     "通过",
+		SignComment:    req.SignComment,
+		SignerName:     req.SignerName,
+		SignDate:       req.SignDate,
+		SignStamp:      req.SignStamp,
 	}
 	if req.SignResult != "" {
 		rec.SignResult = req.SignResult
@@ -2523,6 +2538,50 @@ func (h *ReportSignHandler) Approve(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"message": "报告签发通过"})
+}
+
+// aggregateSignSlip 汇聚生成"报告审核签发单"（流程图 D15）所需数据：
+// 报告编号/标题（取自报告编制）、编制/复核/审核各环节意见、以及实验原始记录（data_entries）。
+func (h *ReportSignHandler) aggregateSignSlip(c *gin.Context, taskOrderID uint) (reportNo, reportTitle, prepareOpinion, reviewOpinion, auditOpinion, rawRecords string) {
+	db := h.getDB(c)
+
+	// 报告编制（D9）——报告编号、标题与编制意见
+	var prepare model.ReportPrepare
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&prepare).Error; err == nil {
+		reportTitle = prepare.ReportTitle
+		reportNo = prepare.ReportNo // 报告编号（报告编制阶段赋号）
+		prepareOpinion = prepare.PrepareOpinion
+	}
+
+	// 报告复核（D10）——复核意见
+	var review model.ReportReview
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&review).Error; err == nil {
+		reviewOpinion = review.ReviewComment
+	}
+
+	// 报告审核（D11）——审核意见
+	var audit model.ReportAudit
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&audit).Error; err == nil {
+		auditOpinion = audit.AuditComment
+	}
+
+	// 实验原始记录（D9/D12 中的"实验原始记录"部分，来自数据录入 data_entries）
+	var entries []model.DataEntry
+	if err := db.Where("task_order_id = ?", taskOrderID).Find(&entries).Error; err == nil && len(entries) > 0 {
+		type rawRec struct {
+			TestItemID   uint   `json:"test_item_id"`
+			OriginalData string `json:"original_data"`
+		}
+		list := make([]rawRec, 0, len(entries))
+		for _, e := range entries {
+			list = append(list, rawRec{TestItemID: e.TestItemID, OriginalData: e.OriginalData})
+		}
+		if b, err := json.Marshal(list); err == nil {
+			rawRecords = string(b)
+		}
+	}
+
+	return reportNo, reportTitle, prepareOpinion, reviewOpinion, auditOpinion, rawRecords
 }
 
 func (h *ReportSignHandler) Reject(c *gin.Context) {
@@ -2922,12 +2981,17 @@ func (h *ProjectArchiveHandler) Approve(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
+	// 若未手动指定归档文件清单，则自动汇聚 D1–D13 全部环节文档（流程图 D14 = 以上所有文档）
+	archiveFiles := req.ArchiveFiles
+	if archiveFiles == "" {
+		archiveFiles = h.aggregateArchiveFiles(c, req.TaskID)
+	}
 	rec := model.ProjectArchive{
 		TaskOrderID:     req.TaskID,
 		ArchiveNo:       req.ArchiveNo,
 		ArchiveLocation: req.ArchiveLocation,
 		ArchiveDate:     req.ArchiveDate,
-		ArchiveFiles:    req.ArchiveFiles,
+		ArchiveFiles:    archiveFiles,
 		ArchiveComment:  req.ArchiveComment,
 		RetentionPeriod: req.RetentionPeriod,
 	}
@@ -2942,6 +3006,94 @@ func (h *ProjectArchiveHandler) Approve(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"message": "项目归档通过"})
+}
+
+// aggregateArchiveFiles 自动汇聚该委托单 D1–D13 全部环节文档，生成归档文件清单（流程图 D14 = 以上所有文档）。
+// 返回 JSON 数组字符串：[{stage, doc_name, ref}]
+func (h *ProjectArchiveHandler) aggregateArchiveFiles(c *gin.Context, taskOrderID uint) string {
+	db := h.getDB(c)
+	type docItem struct {
+		Stage   string `json:"stage"`
+		DocName string `json:"doc_name"`
+		Ref     string `json:"ref"`
+	}
+	docs := make([]docItem, 0)
+
+	// D1 委托任务单
+	var order model.TaskOrder
+	if err := db.First(&order, taskOrderID).Error; err == nil {
+		docs = append(docs, docItem{Stage: "D1", DocName: "委托任务单", Ref: order.OrderNo})
+	}
+
+	// D2 检测合同/协议
+	var contract model.ContractReview
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&contract).Error; err == nil && contract.ContractFilePath != "" {
+		docs = append(docs, docItem{Stage: "D2", DocName: "检测合同/协议", Ref: contract.ContractFilePath})
+	}
+
+	// D3 委托检测方案（质控任务）
+	var qc model.QCTask
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&qc).Error; err == nil && qc.QCDetails != "" {
+		docs = append(docs, docItem{Stage: "D3", DocName: "委托检测方案(含质控)", Ref: qc.QCDetails})
+	}
+
+	// D4 现场采样记录及设备校准记录
+	var field model.FieldSamplingRecord
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&field).Error; err == nil {
+		if field.SamplingRecordFilePath != "" {
+			docs = append(docs, docItem{Stage: "D4", DocName: "现场采样记录", Ref: field.SamplingRecordFilePath})
+		}
+		if field.EquipmentCalRecords != "" {
+			docs = append(docs, docItem{Stage: "D4", DocName: "设备校准记录", Ref: field.EquipmentCalRecords})
+		}
+	}
+
+	// D5 样品接收记录
+	var sample model.SampleReceiving
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&sample).Error; err == nil && sample.ReceivingRecordPath != "" {
+		docs = append(docs, docItem{Stage: "D5", DocName: "样品接收记录", Ref: sample.ReceivingRecordPath})
+	}
+
+	// D6/D7/D8 实验原始记录（数据录入）
+	var entries []model.DataEntry
+	if err := db.Where("task_order_id = ?", taskOrderID).Find(&entries).Error; err == nil {
+		for i := range entries {
+			docs = append(docs, docItem{Stage: "D6", DocName: "实验原始记录", Ref: fmt.Sprintf("data_entry#%d", i+1)})
+		}
+	}
+
+	// D9–D12 报告及审核签发单（报告编制/复核/审核/签发）
+	var prepare model.ReportPrepare
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&prepare).Error; err == nil && prepare.ReportFile != "" {
+		docs = append(docs, docItem{Stage: "D9", DocName: "报告+"+prepare.ReportTitle, Ref: prepare.ReportFile})
+		docs = append(docs, docItem{Stage: "D9", DocName: "实验原始记录", Ref: "随报告"})
+	}
+	var rReview model.ReportReview
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&rReview).Error; err == nil {
+		docs = append(docs, docItem{Stage: "D10", DocName: "报告复核记录", Ref: "已复核"})
+	}
+	var rAudit model.ReportAudit
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&rAudit).Error; err == nil {
+		docs = append(docs, docItem{Stage: "D11", DocName: "报告审核记录", Ref: "已审核"})
+	}
+	var sign model.ReportSign
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&sign).Error; err == nil {
+		docs = append(docs, docItem{Stage: "D12/D15", DocName: "报告审核签发单", Ref: sign.SignStamp})
+	}
+
+	// D13 报告发放记录
+	var print model.ReportPrint
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&print).Error; err == nil {
+		docs = append(docs, docItem{Stage: "D13", DocName: "报告发放记录", Ref: fmt.Sprintf("份数:%d 领取:%s", print.PrintCount, print.RecipientName)})
+	}
+
+	if len(docs) == 0 {
+		return ""
+	}
+	if b, err := json.Marshal(docs); err == nil {
+		return string(b)
+	}
+	return ""
 }
 
 func (h *ProjectArchiveHandler) Reject(c *gin.Context) {

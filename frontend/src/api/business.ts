@@ -455,6 +455,8 @@ export function rejectDataAudit(id: number, data: {
 export interface ReportPrepare {
   id: number
   task_order_id: number
+  report_no: string
+  prepare_opinion: string
   report_title: string
   report_content: string
   report_file: string
@@ -471,6 +473,8 @@ export function getReportPrepare(id: number) {
 }
 export function createReportPrepare(data: {
   task_order_id: number
+  report_no?: string
+  prepare_opinion?: string
   report_title?: string
   report_content?: string
   report_file?: string
@@ -486,6 +490,8 @@ export function deleteReportPrepare(id: number) {
 }
 export function approveReportPrepare(id: number, data: {
   task_id: number
+  report_no?: string
+  prepare_opinion?: string
   report_title?: string
   report_content?: string
   report_file?: string
@@ -596,6 +602,12 @@ export function rejectReportAudit(id: number, data: {
 export interface ReportSign {
   id: number
   task_order_id: number
+  report_no: string
+  report_title: string
+  prepare_opinion: string
+  review_opinion: string
+  audit_opinion: string
+  raw_records: string
   sign_result: string
   sign_comment: string
   signer_name: string

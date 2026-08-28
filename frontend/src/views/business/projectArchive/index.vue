@@ -17,8 +17,12 @@
         <el-table-column prop="archive_location" label="归档位置" width="150" />
         <el-table-column prop="archive_date" label="归档日期" width="170" />
         <el-table-column prop="retention_period" label="保存期限(月)" width="120" />
-        <el-table-column prop="archive_comment" label="归档备注" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="archive_files" label="归档文件" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="archive_comment" label="归档备注" min-width="150" show-overflow-tooltip />
+        <el-table-column label="归档文件" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ formatArchiveFiles(row.archive_files) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="170" />
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
@@ -78,7 +82,9 @@
           <el-input-number v-model="approveForm.retention_period" :min="1" style="width:100%" />
         </el-form-item>
         <el-form-item label="归档文件">
-          <el-input v-model="approveForm.archive_files" type="textarea" :rows="3" placeholder="JSON: [{name, type, path}]" />
+          <el-alert type="info" :closable="false" class="record-preview-alert" title="归档文件清单将自动汇聚本委托全部环节文档（D1–D13）">
+            提交确认后将由系统自动生成，无需手动填写。
+          </el-alert>
         </el-form-item>
         <el-form-item label="归档备注">
           <el-input v-model="approveForm.comment" type="textarea" :rows="3" />
@@ -117,6 +123,18 @@ const loading = ref(false)
 const items = ref<ProjectArchive[]>([])
 const taskOrderIdFilter = ref('')
 
+// 将归档文件清单（JSON 数组字符串 [{stage, doc_name, ref}]）格式化为可读文本
+function formatArchiveFiles(files: string) {
+  if (!files) return '未生成'
+  try {
+    const arr = JSON.parse(files)
+    if (!Array.isArray(arr)) return files
+    return arr.map((f: any) => `${f.doc_name || f.stage || ''}${f.ref ? ': ' + f.ref : ''}`).join('；')
+  } catch {
+    return files
+  }
+}
+
 onMounted(async () => { await loadData() })
 
 async function loadData() {
@@ -151,7 +169,7 @@ const approveForm = reactive({ id: 0, task_order_id: 0, archive_no: '', archive_
 function openApprove(row: ProjectArchive) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.archive_no = row.archive_no; approveForm.archive_location = row.archive_location; approveForm.archive_date = row.archive_date; approveForm.archive_files = row.archive_files; approveForm.retention_period = row.retention_period || 36; approveForm.comment = ''; approveVisible.value = true }
 async function handleApprove() {
   approving.value = true
-  try { await approveProjectArchive(approveForm.id, { task_id: approveForm.task_order_id, archive_no: approveForm.archive_no, archive_location: approveForm.archive_location, archive_date: approveForm.archive_date, archive_files: approveForm.archive_files, archive_comment: approveForm.comment, retention_period: approveForm.retention_period }); ElMessage.success('项目归档完成，流程已结束'); approveVisible.value = false; await loadData() }
+  try { await approveProjectArchive(approveForm.id, { task_id: approveForm.task_order_id, archive_no: approveForm.archive_no, archive_location: approveForm.archive_location, archive_date: approveForm.archive_date, archive_files: '', archive_comment: approveForm.comment, retention_period: approveForm.retention_period }); ElMessage.success('项目归档完成，流程已结束'); approveVisible.value = false; await loadData() }
   catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
   finally { approving.value = false }
 }
@@ -168,3 +186,10 @@ async function handleReject() {
   finally { rejecting.value = false }
 }
 </script>
+
+<style scoped>
+.record-preview-alert {
+  width: 100%;
+  margin-bottom: 0;
+}
+</style>

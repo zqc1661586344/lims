@@ -157,10 +157,14 @@ const activeMenu = computed(() => route.path)
 <style scoped>
 .sidebar {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .sidebar-logo {
   height: 50px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -177,7 +181,11 @@ const activeMenu = computed(() => route.path)
   font-weight: bold;
 }
 
+/* 菜单区域：允许纵向滚动，菜单项多时（如商务流程）可滚动查看底部，
+   修复"数据审核等底部菜单被屏幕挡住无法看到"的问题 */
 .el-menu {
   border-right: none;
+  flex: 1;
+  overflow-y: auto;
 }
 </style>

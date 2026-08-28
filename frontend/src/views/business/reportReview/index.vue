@@ -57,8 +57,27 @@
     </el-dialog>
 
     <!-- Approve dialog -->
-    <el-dialog v-model="approveVisible" title="报告复核 - 通过" width="500px">
+    <el-dialog v-model="approveVisible" title="报告复核 - 通过" width="620px">
       <el-form :model="approveForm" label-width="100px">
+        <!-- 承接报告编制产出的报告（只读预览） -->
+        <el-alert v-if="sourceReport" type="info" :closable="false" title="承接报告" class="source-report-alert">
+          <div class="source-report-body">
+            <div><b>报告标题：</b>{{ sourceReport.report_title || '（未填写）' }}</div>
+            <div><b>报告文件：</b>{{ sourceReport.report_file || '（无）' }}</div>
+            <div v-if="sourceReport.report_content"><b>报告内容：</b>{{ sourceReport.report_content }}</div>
+          </div>
+        </el-alert>
+        <el-alert v-else-if="approveForm.task_order_id && sourceLoaded" type="warning" :closable="false" title="未找到关联的报告编制记录，请确认委托ID是否正确" class="source-report-alert" />
+        <el-form-item label="实验原始记录">
+          <div class="raw-records-panel">
+            <el-table :data="rawEntries" size="small" border empty-text="暂无实验原始记录" max-height="180">
+              <el-table-column prop="id" label="ID" width="60" />
+              <el-table-column prop="test_item_id" label="检测项目ID" width="100" />
+              <el-table-column prop="original_data" label="原始数据" min-width="200" show-overflow-tooltip />
+              <el-table-column prop="created_at" label="录入时间" width="170" />
+            </el-table>
+          </div>
+        </el-form-item>
         <el-form-item label="委托ID">{{ approveForm.task_order_id }}</el-form-item>
         <el-form-item label="复核结果">
           <el-select v-model="approveForm.review_result" placeholder="选择结果" style="width:100%">
@@ -99,8 +118,8 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { getReportReviewList, getReportReview, createReportReview, updateReportReview, deleteReportReview, approveReportReview, rejectReportReview } from '@/api/business'
-import type { ReportReview } from '@/api/business'
+import { getReportReviewList, getReportReview, createReportReview, updateReportReview, deleteReportReview, approveReportReview, rejectReportReview, getReportPrepareList, getDataEntryList } from '@/api/business'
+import type { ReportReview, ReportPrepare, DataEntry } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<ReportReview[]>([])
@@ -136,8 +155,29 @@ async function handleSave() {
 async function handleDelete(id: number) { await deleteReportReview(id); ElMessage.success('删除成功'); await loadData() }
 
 const approveVisible = ref(false); const approving = ref(false)
+const sourceReport = ref<ReportPrepare | null>(null)
+const sourceLoaded = ref(false)
+const rawEntries = ref<DataEntry[]>([])
 const approveForm = reactive({ id: 0, task_order_id: 0, review_result: '通过', comment: '', reviewed_items: '' })
-function openApprove(row: ReportReview) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.review_result = '通过'; approveForm.comment = ''; approveForm.reviewed_items = row.reviewed_items; approveVisible.value = true }
+function openApprove(row: ReportReview) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.review_result = '通过'; approveForm.comment = ''; approveForm.reviewed_items = row.reviewed_items; approveVisible.value = true; loadSourceReport(row.task_order_id) }
+
+// 加载该委托单关联的报告编制记录，供复核时承接查看（流程图 D10 = 报告 + 实验原始记录）
+async function loadSourceReport(taskOrderId: number) {
+  sourceReport.value = null
+  sourceLoaded.value = false
+  rawEntries.value = []
+  if (!taskOrderId) return
+  try {
+    const res = await getReportPrepareList({ task_order_id: String(taskOrderId) })
+    const list = (res.data || []) as ReportPrepare[]
+    sourceReport.value = list.length ? list[0] : null
+    // 实验原始记录贯穿展示（数据录入 data_entries 产生）
+    const dr = await getDataEntryList({ task_order_id: String(taskOrderId) })
+    rawEntries.value = (dr.data || []) as DataEntry[]
+  } finally {
+    sourceLoaded.value = true
+  }
+}
 async function handleApprove() {
   approving.value = true
   try { await approveReportReview(approveForm.id, { task_id: approveForm.task_order_id, review_result: approveForm.review_result, review_comment: approveForm.comment, reviewed_items: approveForm.reviewed_items }); ElMessage.success('复核通过，流程已推进'); approveVisible.value = false; await loadData() }
@@ -157,3 +197,17 @@ async function handleReject() {
   finally { rejecting.value = false }
 }
 </script>
+
+<style scoped>
+.source-report-alert {
+  margin-bottom: 14px;
+}
+.source-report-body {
+  font-size: 13px;
+  line-height: 1.7;
+  margin-top: 4px;
+}
+.raw-records-panel {
+  width: 100%;
+}
+</style>

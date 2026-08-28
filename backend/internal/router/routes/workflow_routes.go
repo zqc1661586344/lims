@@ -24,6 +24,7 @@ func RegisterWorkflowRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB)
 
 		// Task operations
 		group.GET("/tasks/pending", wfH.GetPendingTasks)
+		group.GET("/tasks/pending/user", wfH.GetPendingTasksByUser)
 		group.POST("/tasks/:id/approve", wfH.ApproveTask)
 		group.POST("/tasks/:id/reject", wfH.RejectTask)
 

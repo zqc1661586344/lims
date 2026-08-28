@@ -13,6 +13,8 @@
 
       <el-table :data="items" stripe v-loading="loading">
         <el-table-column prop="task_order_id" label="委托ID" width="80" />
+        <el-table-column prop="report_no" label="报告编号" width="140" show-overflow-tooltip />
+        <el-table-column prop="report_title" label="报告标题" min-width="160" show-overflow-tooltip />
         <el-table-column prop="sign_result" label="签发结果" width="100">
           <template #default="{ row }">
             <el-tag :type="row.sign_result === '通过' ? 'success' : 'danger'" size="small">{{ row.sign_result }}</el-tag>
@@ -20,9 +22,7 @@
         </el-table-column>
         <el-table-column prop="signer_name" label="签发人" width="120" />
         <el-table-column prop="sign_date" label="签发日期" width="170" />
-        <el-table-column prop="sign_comment" label="签发意见" min-width="180" show-overflow-tooltip />
         <el-table-column prop="sign_stamp" label="印章文件" width="150" show-overflow-tooltip />
-        <el-table-column prop="created_at" label="创建时间" width="170" />
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
@@ -65,9 +65,36 @@
     </el-dialog>
 
     <!-- Approve dialog -->
-    <el-dialog v-model="approveVisible" title="报告签发 - 通过" width="500px">
+    <el-dialog v-model="approveVisible" title="报告签发 - 通过" width="680px">
       <el-form :model="approveForm" label-width="100px">
+        <!-- 报告审核签发单（D15）承接预览：汇聚编制/复核/审核意见及实验原始记录 -->
+        <el-alert v-if="sourceReport" type="info" :closable="false" title="报告审核签发单 - 承接报告" class="source-report-alert">
+          <div class="source-report-body">
+            <div><b>报告编号：</b>{{ sourceReport.report_no || '（未填写）' }}</div>
+            <div><b>报告标题：</b>{{ sourceReport.report_title || '（未填写）' }}</div>
+            <div><b>报告文件：</b>{{ sourceReport.report_file || '（无）' }}</div>
+            <div v-if="sourceReport.report_content"><b>报告内容：</b>{{ sourceReport.report_content }}</div>
+          </div>
+        </el-alert>
+        <el-alert v-else-if="approveForm.task_order_id && sourceLoaded" type="warning" :closable="false" title="未找到关联的报告编制记录，请确认委托ID是否正确" class="source-report-alert" />
+        <!-- 报告审核签发单：展示编制人意见（后端 aggregateSignSlip 已汇聚到 report_prepares.prepare_opinion） -->
+        <el-form-item label="编制人意见" v-if="sourceReport">
+          <el-input :model-value="sourceReport.prepare_opinion || '（未填写）'" type="textarea" :rows="2" readonly />
+        </el-form-item>
+        <el-form-item label="实验原始记录">
+          <div class="raw-records-panel">
+            <el-table :data="rawEntries" size="small" border empty-text="暂无实验原始记录" max-height="180">
+              <el-table-column prop="id" label="ID" width="60" />
+              <el-table-column prop="test_item_id" label="检测项目ID" width="100" />
+              <el-table-column prop="original_data" label="原始数据" min-width="200" show-overflow-tooltip />
+              <el-table-column prop="created_at" label="录入时间" width="170" />
+            </el-table>
+          </div>
+        </el-form-item>
         <el-form-item label="委托ID">{{ approveForm.task_order_id }}</el-form-item>
+        <el-form-item label="报告编号">
+          <el-input v-model="approveForm.report_no" placeholder="报告编号（沿用报告编制赋号）" />
+        </el-form-item>
         <el-form-item label="签发结果">
           <el-select v-model="approveForm.sign_result" placeholder="选择结果" style="width:100%">
             <el-option label="通过" value="通过" />
@@ -113,8 +140,8 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { getReportSignList, getReportSign, createReportSign, updateReportSign, deleteReportSign, approveReportSign, rejectReportSign } from '@/api/business'
-import type { ReportSign } from '@/api/business'
+import { getReportSignList, getReportSign, createReportSign, updateReportSign, deleteReportSign, approveReportSign, rejectReportSign, getReportPrepareList, getDataEntryList } from '@/api/business'
+import type { ReportSign, ReportPrepare, DataEntry } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<ReportSign[]>([])
@@ -150,11 +177,33 @@ async function handleSave() {
 async function handleDelete(id: number) { await deleteReportSign(id); ElMessage.success('删除成功'); await loadData() }
 
 const approveVisible = ref(false); const approving = ref(false)
-const approveForm = reactive({ id: 0, task_order_id: 0, sign_result: '通过', comment: '', signer_name: '', sign_date: '', sign_stamp: '' })
-function openApprove(row: ReportSign) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.sign_result = '通过'; approveForm.comment = ''; approveForm.signer_name = row.signer_name; approveForm.sign_date = row.sign_date; approveForm.sign_stamp = row.sign_stamp; approveVisible.value = true }
+const sourceReport = ref<ReportPrepare | null>(null)
+const sourceLoaded = ref(false)
+const rawEntries = ref<DataEntry[]>([])
+const approveForm = reactive({ id: 0, task_order_id: 0, report_no: '', sign_result: '通过', comment: '', signer_name: '', sign_date: '', sign_stamp: '' })
+function openApprove(row: ReportSign) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.report_no = row.report_no || ''; approveForm.sign_result = '通过'; approveForm.comment = ''; approveForm.signer_name = row.signer_name; approveForm.sign_date = row.sign_date; approveForm.sign_stamp = row.sign_stamp; approveVisible.value = true; loadSourceReport(row.task_order_id) }
+
+// 加载该委托单关联的报告编制记录，供签发时承接查看（流程图 D12 = 报告 + 实验原始记录）
+async function loadSourceReport(taskOrderId: number) {
+  sourceReport.value = null
+  sourceLoaded.value = false
+  rawEntries.value = []
+  if (!taskOrderId) return
+  try {
+    const res = await getReportPrepareList({ task_order_id: String(taskOrderId) })
+    const list = (res.data || []) as ReportPrepare[]
+    sourceReport.value = list.length ? list[0] : null
+    if (list.length) approveForm.report_no = list[0].report_no || ''
+    // 实验原始记录贯穿展示（数据录入 data_entries 产生）
+    const dr = await getDataEntryList({ task_order_id: String(taskOrderId) })
+    rawEntries.value = (dr.data || []) as DataEntry[]
+  } finally {
+    sourceLoaded.value = true
+  }
+}
 async function handleApprove() {
   approving.value = true
-  try { await approveReportSign(approveForm.id, { task_id: approveForm.task_order_id, sign_result: approveForm.sign_result, sign_comment: approveForm.comment, signer_name: approveForm.signer_name, sign_date: approveForm.sign_date, sign_stamp: approveForm.sign_stamp }); ElMessage.success('签发通过，流程已推进'); approveVisible.value = false; await loadData() }
+  try { await approveReportSign(approveForm.id, { task_id: approveForm.task_order_id, report_no: approveForm.report_no, sign_result: approveForm.sign_result, sign_comment: approveForm.comment, signer_name: approveForm.signer_name, sign_date: approveForm.sign_date, sign_stamp: approveForm.sign_stamp }); ElMessage.success('签发通过，流程已推进'); approveVisible.value = false; await loadData() }
   catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
   finally { approving.value = false }
 }
@@ -171,3 +220,17 @@ async function handleReject() {
   finally { rejecting.value = false }
 }
 </script>
+
+<style scoped>
+.source-report-alert {
+  margin-bottom: 14px;
+}
+.source-report-body {
+  font-size: 13px;
+  line-height: 1.7;
+  margin-top: 4px;
+}
+.raw-records-panel {
+  width: 100%;
+}
+</style>

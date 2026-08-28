@@ -74,6 +74,17 @@ func (h *WorkflowHandler) GetPendingTasks(c *gin.Context) {
 	utils.Success(c, tasks)
 }
 
+// GetPendingTasksByUser returns pending tasks only for the current user.
+func (h *WorkflowHandler) GetPendingTasksByUser(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	tasks, err := h.svc.GetPendingTasks(nil, userID) // deptID=nil → 只查本人待办
+	if err != nil {
+		utils.InternalError(c, "查询我的待办失败")
+		return
+	}
+	utils.Success(c, tasks)
+}
+
 // GetProcessHistory returns the task history for a process instance.
 func (h *WorkflowHandler) GetProcessHistory(c *gin.Context) {
 	id, err := parseUint(c.Param("id"))

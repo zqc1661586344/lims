@@ -32,7 +32,7 @@ func GetDefinition() []NodeDefinition {
 		{
 			Code:         NodeQCTask,
 			Name:         "质控任务",
-			DeptCode:     DeptReport,
+			DeptCode:     DeptQC, // 质控室（与业务流程图一致）
 			CanReject:    true,
 			RejectTarget: NodeContractReview,
 			NextNode:     NodeSamplingSchedule,
