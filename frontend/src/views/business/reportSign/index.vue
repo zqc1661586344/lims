@@ -23,7 +23,7 @@
         <el-table-column prop="sign_comment" label="签发意见" min-width="180" show-overflow-tooltip />
         <el-table-column prop="sign_stamp" label="印章文件" width="150" show-overflow-tooltip />
         <el-table-column prop="created_at" label="创建时间" width="170" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="success" @click="openApprove(row)">通过</el-button>

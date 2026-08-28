@@ -23,7 +23,7 @@
         <el-table-column prop="sample_codes" label="样品编码" min-width="200" show-overflow-tooltip />
         <el-table-column prop="receiving_record_path" label="接收记录文件" min-width="180" show-overflow-tooltip />
         <el-table-column prop="created_at" label="创建时间" width="170" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="success" @click="openApprove(row)">通过</el-button>
