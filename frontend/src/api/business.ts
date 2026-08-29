@@ -776,6 +776,7 @@ export interface PendingTask {
   node_name: string
   next_node?: string
   next_node_name?: string
+  next_dept_name?: string
   title: string
   business_type: string
   business_id: number

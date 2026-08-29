@@ -1,5 +1,5 @@
 <template>
-  <el-card>
+  <el-card class="task-list-card">
     <template #header>
       <div class="card-header">
         <span>{{ title }}</span>
@@ -9,21 +9,27 @@
 
     <el-empty v-if="!tasks.length" description="暂无待办任务" />
 
-    <el-table v-else :data="tasks" stripe v-loading="loading" @row-click="handleRowClick" style="cursor: pointer;">
-      <el-table-column label="任务标题" min-width="150">
+    <el-table v-else :data="tasks" stripe v-loading="loading" min-width="1150" @row-click="handleRowClick" style="cursor: pointer;">
+      <el-table-column prop="business_id" label="委托ID" width="80" />
+      <el-table-column label="任务标题" width="220">
         <template #default="{ row }">
           <div class="task-title">{{ row.title }}</div>
         </template>
       </el-table-column>
       <el-table-column prop="node_name" label="当前节点" width="110" />
+      <el-table-column label="当前责任部门" width="130">
+        <template #default="{ row }">
+          <el-tag v-if="row.dept_name" size="small" type="success">{{ row.dept_name }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="下一节点" width="110">
         <template #default="{ row }">
           <span v-if="row.next_node_name" class="next-node">{{ row.next_node_name }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="责任部门" width="90">
+      <el-table-column label="下一责任部门" width="130">
         <template #default="{ row }">
-          <el-tag v-if="row.dept_name" size="small" type="success">{{ row.dept_name }}</el-tag>
+          <el-tag v-if="row.next_dept_name" size="small" type="warning">{{ row.next_dept_name }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="create_time" label="到达时间" width="150" />
@@ -80,8 +86,15 @@ function handleAction(task: TaskItem) {
 </script>
 
 <style scoped>
+.task-list-card {
+  margin-bottom: 16px;
+  min-height: 260px;
+}
 .task-title {
   font-weight: 500;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.35;
 }
 .next-node {
   color: #909399;

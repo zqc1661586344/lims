@@ -241,19 +241,39 @@ func (e *Engine) GetAllPendingTasks() ([]map[string]interface{}, error) {
 	return tasks, err
 }
 
-// attachNextNode appends next_node / next_node_name to each pending task row.
+// attachNextNode appends next_node / next_node_name / next_dept_name to each pending task row.
 // The next node (from the workflow definition) is displayed on the frontend so
 // operators know which node the task advances to after approval.
 func (e *Engine) attachNextNode(tasks []map[string]interface{}) {
+	deptNames := e.deptNameMap()
 	for _, t := range tasks {
 		code, _ := t["node_code"].(string)
 		if def, ok := e.nodeMap[code]; ok && def.NextNode != "" {
 			if next, ok2 := e.nodeMap[def.NextNode]; ok2 {
 				t["next_node"] = next.Code
 				t["next_node_name"] = next.Name
+				if name, ok3 := deptNames[next.DeptCode]; ok3 {
+					t["next_dept_name"] = name
+				}
 			}
 		}
 	}
+}
+
+// deptNameMap loads the depts table (code -> name) once per call so the next
+// node's responsible department can be shown on the frontend.
+func (e *Engine) deptNameMap() map[string]string {
+	type deptRow struct {
+		Code string
+		Name string
+	}
+	var rows []deptRow
+	e.db.Raw(`SELECT code, name FROM depts`).Scan(&rows)
+	m := make(map[string]string, len(rows))
+	for _, r := range rows {
+		m[r.Code] = r.Name
+	}
+	return m
 }
 
 // getPendingTaskIDByBusiness resolves the currently-pending workflow task ID

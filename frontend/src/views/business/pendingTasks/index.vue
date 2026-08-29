@@ -1,32 +1,27 @@
 <template>
   <div class="pending-tasks">
-    <el-row :gutter="16">
-      <el-col :span="8">
-        <TaskList
-          :title="isAdminUser ? '部门待办（管理员·全部部门）' : '部门待办'"
-          :tasks="deptTasks"
-          :loading="deptLoading"
-          @action="openApproval"
-          @row-click="showDetail"
-        />
-      </el-col>
-      <el-col :span="8">
-        <TaskList
-          title="我的待办"
-          :tasks="myTasks"
-          :loading="myLoading"
-          @action="openApproval"
-          @row-click="showDetail"
-        />
-      </el-col>
-      <el-col :span="8">
-        <el-card v-if="selectedInstanceId">
-          <template #header><span>流程进度</span></template>
-          <ProcessTimeline :nodes="timelineNodes" />
-        </el-card>
-        <el-empty v-else description="请选择待办任务查看流程" />
-      </el-col>
-    </el-row>
+    <TaskList
+      :title="isAdminUser ? '部门待办（管理员·全部部门）' : '部门待办'"
+      :tasks="deptTasks"
+      :loading="deptLoading"
+      @action="openApproval"
+      @row-click="showDetail"
+    />
+
+    <TaskList
+      title="我的待办"
+      class="my-tasks"
+      :tasks="myTasks"
+      :loading="myLoading"
+      @action="openApproval"
+      @row-click="showDetail"
+    />
+
+    <el-card class="timeline-card" v-if="selectedInstanceId">
+      <template #header><span>流程进度</span></template>
+      <ProcessTimeline :nodes="timelineNodes" />
+    </el-card>
+    <el-empty v-else class="timeline-card" description="请选择待办任务查看流程" />
 
     <ApprovalDialog ref="approvalDialogRef" :reject-targets="nodeDefs" @submit="handleApprovalSubmit" />
   </div>
@@ -111,3 +106,14 @@ async function handleApprovalSubmit(data: { action: string; comment: string; rej
   }
 }
 </script>
+
+<style scoped>
+.pending-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.timeline-card {
+  min-height: 120px;
+}
+</style>
