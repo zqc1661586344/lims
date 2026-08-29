@@ -305,13 +305,31 @@ func (e *Engine) GetPendingTaskIDByOrder(orderID uint) (uint, error) {
 }
 
 // GetProcessHistory returns the full task history for a process instance.
+// The returned fields are aliased to match the frontend TimelineNode shape
+// (name/time/status/active/operator/dept/comment) so no client-side mapping is needed.
 func (e *Engine) GetProcessHistory(instanceID uint) ([]map[string]interface{}, error) {
-	return e.queryTasks(`
-		SELECT pt.id, pt.node_code, pt.node_name, pt.status, pt.comment,
-			pt.assignee_user_id, pt.created_at, pt.updated_at
+	history, err := e.queryTasks(`
+		SELECT pt.id, pt.node_code, pt.node_name AS name, pt.status, pt.comment,
+			pt.assignee_user_id, u.username AS operator, d.name AS dept,
+			pt.created_at, pi.current_node
 		FROM process_tasks pt
+		JOIN process_instances pi ON pi.id = pt.process_instance_id
+		LEFT JOIN users u ON u.id = pt.assignee_user_id
+		LEFT JOIN depts d ON d.id = pt.assignee_dept_id
 		WHERE pt.process_instance_id = ?
 		ORDER BY pt.id ASC`, instanceID)
+
+	// Normalize into the shape the frontend ProcessTimeline expects.
+	for _, row := range history {
+		row["time"] = row["created_at"]
+		delete(row, "created_at")
+		row["active"] = row["current_node"] == row["node_code"]
+		delete(row, "current_node")
+		delete(row, "node_code")
+		delete(row, "id")
+		delete(row, "assignee_user_id")
+	}
+	return history, err
 }
 
 // GetInstance returns a process instance by ID.
