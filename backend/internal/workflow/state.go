@@ -5,7 +5,7 @@ package workflow
 const (
 	NodeTaskCreate       = "node_task_create"        // 1  - 业务室 - 任务创建
 	NodeContractReview   = "node_contract_review"    // 2  - 技术室 - 合同评审
-	NodeQCTask           = "node_qc_task"            // 3  - 报告室 - 质控任务
+	NodeQCTask           = "node_qc_task"            // 3  - 质控室 - 质控任务
 	NodeSamplingSchedule = "node_sampling_schedule"  // 4  - 现场室 - 采样调度
 	NodeFieldSampling    = "node_field_sampling"     // 5  - 现场室 - 现场采样
 	NodeSampleReceiving  = "node_sample_receiving"   // 6  - 样品室 - 样品接收
