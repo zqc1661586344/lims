@@ -63,10 +63,12 @@ func (h *WorkflowHandler) GetInstance(c *gin.Context) {
 }
 
 // GetPendingTasks returns pending tasks for the current user or their department.
+// Admin (is_admin=true) sees all departments' pending tasks (cross-department view).
 func (h *WorkflowHandler) GetPendingTasks(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	deptID := middleware.GetDeptID(c)
-	tasks, err := h.svc.GetPendingTasks(deptID, userID)
+	isAdmin := middleware.IsAdmin(c)
+	tasks, err := h.svc.GetPendingTasks(deptID, userID, isAdmin)
 	if err != nil {
 		utils.InternalError(c, "查询待办任务失败")
 		return
@@ -75,9 +77,11 @@ func (h *WorkflowHandler) GetPendingTasks(c *gin.Context) {
 }
 
 // GetPendingTasksByUser returns pending tasks only for the current user.
+// Admin still gets cross-department tasks here so a single admin can drive the full flow.
 func (h *WorkflowHandler) GetPendingTasksByUser(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	tasks, err := h.svc.GetPendingTasks(nil, userID) // deptID=nil → 只查本人待办
+	isAdmin := middleware.IsAdmin(c)
+	tasks, err := h.svc.GetPendingTasks(nil, userID, isAdmin) // deptID=nil → 查本人（admin 时查全部）
 	if err != nil {
 		utils.InternalError(c, "查询我的待办失败")
 		return

@@ -774,11 +774,14 @@ export interface PendingTask {
   id: number
   node_code: string
   node_name: string
+  next_node?: string
+  next_node_name?: string
   title: string
   business_type: string
   business_id: number
   process_instance_id: number
   assignee_dept_id: number
+  dept_name?: string
   created_at: string
 }
 export interface TimelineNode {

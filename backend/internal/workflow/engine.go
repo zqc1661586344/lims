@@ -199,24 +199,89 @@ func (e *Engine) RejectTask(taskID uint, userID uint, comment string) error {
 
 // GetPendingTasksByUser returns all pending tasks assigned to a specific user.
 func (e *Engine) GetPendingTasksByUser(userID uint) ([]map[string]interface{}, error) {
-	return e.queryTasks(`
+	tasks, err := e.queryTasks(`
 		SELECT pt.id, pt.node_code, pt.node_name, pt.created_at,
 			pi.title, pi.business_type, pi.business_id, pi.id as process_instance_id
 		FROM process_tasks pt
 		JOIN process_instances pi ON pi.id = pt.process_instance_id
 		WHERE pt.status = 'pending' AND pt.assignee_user_id = ?
 		ORDER BY pt.created_at DESC`, userID)
+	e.attachNextNode(tasks)
+	return tasks, err
 }
 
 // GetPendingTasksByDept returns all pending tasks assigned to a department.
 func (e *Engine) GetPendingTasksByDept(deptID uint) ([]map[string]interface{}, error) {
-	return e.queryTasks(`
+	tasks, err := e.queryTasks(`
 		SELECT pt.id, pt.node_code, pt.node_name, pt.created_at,
-			pi.title, pi.business_type, pi.business_id, pi.id as process_instance_id
+			pi.title, pi.business_type, pi.business_id, pi.id as process_instance_id,
+			d.name as dept_name
 		FROM process_tasks pt
 		JOIN process_instances pi ON pi.id = pt.process_instance_id
+		LEFT JOIN depts d ON d.id = pt.assignee_dept_id
 		WHERE pt.status = 'pending' AND pt.assignee_dept_id = ?
 		ORDER BY pt.created_at DESC`, deptID)
+	e.attachNextNode(tasks)
+	return tasks, err
+}
+
+// GetAllPendingTasks returns ALL pending tasks across every department.
+// Used by admin (cross-department view). Non-admin users should never call this.
+func (e *Engine) GetAllPendingTasks() ([]map[string]interface{}, error) {
+	tasks, err := e.queryTasks(`
+		SELECT pt.id, pt.node_code, pt.node_name, pt.created_at,
+			pi.title, pi.business_type, pi.business_id, pi.id as process_instance_id,
+			pt.assignee_dept_id, d.name as dept_name
+		FROM process_tasks pt
+		JOIN process_instances pi ON pi.id = pt.process_instance_id
+		LEFT JOIN depts d ON d.id = pt.assignee_dept_id
+		WHERE pt.status = 'pending'
+		ORDER BY pt.created_at DESC`)
+	e.attachNextNode(tasks)
+	return tasks, err
+}
+
+// attachNextNode appends next_node / next_node_name to each pending task row.
+// The next node (from the workflow definition) is displayed on the frontend so
+// operators know which node the task advances to after approval.
+func (e *Engine) attachNextNode(tasks []map[string]interface{}) {
+	for _, t := range tasks {
+		code, _ := t["node_code"].(string)
+		if def, ok := e.nodeMap[code]; ok && def.NextNode != "" {
+			if next, ok2 := e.nodeMap[def.NextNode]; ok2 {
+				t["next_node"] = next.Code
+				t["next_node_name"] = next.Name
+			}
+		}
+	}
+}
+
+// getPendingTaskIDByBusiness resolves the currently-pending workflow task ID
+// for a business entity (e.g. a task order). It joins the running process
+// instance for that business and finds its active pending task.
+// Returns 0 (no error) if no pending task is found.
+func (e *Engine) getPendingTaskIDByBusiness(businessType string, businessID uint) (uint, error) {
+	var taskID uint
+	err := e.db.Raw(`
+		SELECT pt.id
+		FROM process_tasks pt
+		JOIN process_instances pi ON pi.id = pt.process_instance_id
+		WHERE pi.business_type = ? AND pi.business_id = ?
+			AND pi.status = 'running'
+			AND pt.status = 'pending'
+			AND pt.node_code = pi.current_node
+		ORDER BY pt.id DESC
+		LIMIT 1`, businessType, businessID).Scan(&taskID).Error
+	if err != nil {
+		return 0, fmt.Errorf("resolve pending task: %w", err)
+	}
+	return taskID, nil
+}
+
+// GetPendingTaskIDByOrder resolves the pending workflow task ID for a task order.
+// Exposed for business appovals that only know the task_order_id.
+func (e *Engine) GetPendingTaskIDByOrder(orderID uint) (uint, error) {
+	return e.getPendingTaskIDByBusiness("task_order", orderID)
 }
 
 // GetProcessHistory returns the full task history for a process instance.

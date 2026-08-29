@@ -389,7 +389,7 @@ func (h *ContractReviewHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.ReviewComment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.ReviewComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -415,7 +415,7 @@ func (h *ContractReviewHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.ReviewComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.ReviewComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -560,7 +560,7 @@ func (h *QCTaskHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -582,7 +582,7 @@ func (h *QCTaskHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -735,7 +735,7 @@ func (h *SamplingScheduleHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(sched).FirstOrCreate(&sched)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -757,7 +757,7 @@ func (h *SamplingScheduleHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(sched).FirstOrCreate(&sched)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -910,7 +910,7 @@ func (h *FieldSamplingRecordHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -932,7 +932,7 @@ func (h *FieldSamplingRecordHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -1085,7 +1085,7 @@ func (h *SampleReceivingHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -1107,7 +1107,7 @@ func (h *SampleReceivingHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -1252,7 +1252,7 @@ func (h *TaskAssignHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -1274,7 +1274,7 @@ func (h *TaskAssignHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -1427,7 +1427,7 @@ func (h *DataEntryHandler) Approve(c *gin.Context) {
 	}
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -1444,7 +1444,7 @@ func (h *DataEntryHandler) Reject(c *gin.Context) {
 		return
 	}
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -1600,7 +1600,7 @@ func (h *DataReviewHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -1624,7 +1624,7 @@ func (h *DataReviewHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.ReviewComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.ReviewComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -1780,7 +1780,7 @@ func (h *DataAuditHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(audit).FirstOrCreate(&audit)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -1804,7 +1804,7 @@ func (h *DataAuditHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(audit).FirstOrCreate(&audit)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.AuditComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.AuditComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -1969,7 +1969,7 @@ func (h *ReportPrepareHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -1991,7 +1991,7 @@ func (h *ReportPrepareHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -2147,7 +2147,7 @@ func (h *ReportReviewHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -2171,7 +2171,7 @@ func (h *ReportReviewHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.ReviewComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.ReviewComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -2327,7 +2327,7 @@ func (h *ReportAuditHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -2351,7 +2351,7 @@ func (h *ReportAuditHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.AuditComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.AuditComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -2533,7 +2533,7 @@ func (h *ReportSignHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -2601,7 +2601,7 @@ func (h *ReportSignHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.SignComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.SignComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -2792,7 +2792,7 @@ func (h *ReportPrintHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -2816,7 +2816,7 @@ func (h *ReportPrintHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.PrintComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.PrintComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
@@ -3001,7 +3001,7 @@ func (h *ProjectArchiveHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -3112,7 +3112,7 @@ func (h *ProjectArchiveHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(req.TaskID, userID, req.ArchiveComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.ArchiveComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}

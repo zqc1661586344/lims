@@ -10,19 +10,29 @@
     <el-empty v-if="!tasks.length" description="暂无待办任务" />
 
     <el-table v-else :data="tasks" stripe v-loading="loading" @row-click="handleRowClick" style="cursor: pointer;">
-      <el-table-column label="任务标题" min-width="180">
+      <el-table-column label="任务标题" min-width="150">
         <template #default="{ row }">
           <div class="task-title">{{ row.title }}</div>
         </template>
       </el-table-column>
-      <el-table-column prop="node_name" label="当前节点" width="120" />
-      <el-table-column prop="create_time" label="到达时间" width="160" />
-      <el-table-column label="紧急程度" width="90">
+      <el-table-column prop="node_name" label="当前节点" width="110" />
+      <el-table-column label="下一节点" width="110">
+        <template #default="{ row }">
+          <span v-if="row.next_node_name" class="next-node">{{ row.next_node_name }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="责任部门" width="90">
+        <template #default="{ row }">
+          <el-tag v-if="row.dept_name" size="small" type="success">{{ row.dept_name }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="create_time" label="到达时间" width="150" />
+      <el-table-column label="紧急程度" width="85">
         <template #default="{ row }">
           <el-tag :type="urgencyType(row.urgency)" size="small">{{ row.urgency || '普通' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="100">
+      <el-table-column label="操作" width="90">
         <template #default="{ row }">
           <el-button size="small" type="primary" @click.stop="handleAction(row)">处理</el-button>
         </template>
@@ -72,5 +82,9 @@ function handleAction(task: TaskItem) {
 <style scoped>
 .task-title {
   font-weight: 500;
+}
+.next-node {
+  color: #909399;
+  font-size: 13px;
 }
 </style>

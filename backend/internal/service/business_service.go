@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"lims-backend/internal/workflow"
 
 	"gorm.io/gorm"
@@ -9,12 +10,14 @@ import (
 // BusinessService wraps the workflow engine for Phase 6 business flow operations.
 type BusinessService struct {
 	engine *workflow.Engine
+	db     *gorm.DB
 }
 
 // NewBusinessService creates a new business service.
 func NewBusinessService(db *gorm.DB) *BusinessService {
 	return &BusinessService{
 		engine: workflow.NewEngine(db),
+		db:     db,
 	}
 }
 
@@ -23,35 +26,38 @@ func (s *BusinessService) StartWorkflow(businessType string, businessID uint, ti
 	return s.engine.StartInstance(businessType, businessID, title, createdBy)
 }
 
-// ApproveTask approves a pending task.
+// ApproveTask approves a workflow task by its process_tasks.id.
 func (s *BusinessService) ApproveTask(taskID uint, userID uint, comment string) error {
 	return s.engine.ApproveTask(taskID, userID, comment)
 }
 
-// RejectTask rejects a pending task.
+// RejectTask rejects a workflow task by its process_tasks.id.
 func (s *BusinessService) RejectTask(taskID uint, userID uint, comment string) error {
 	return s.engine.RejectTask(taskID, userID, comment)
 }
 
-// GetPendingTasks returns pending tasks for a user or their department.
-func (s *BusinessService) GetPendingTasks(deptID *uint, userID uint) ([]map[string]interface{}, error) {
-	if deptID != nil && *deptID > 0 {
-		return s.engine.GetPendingTasksByDept(*deptID)
+// ApproveTaskByOrder approves the current pending task for a task order.
+// The business frontend only knows the task_order_id, not the workflow task id,
+// so we resolve the active pending task before approving.
+func (s *BusinessService) ApproveTaskByOrder(orderID uint, userID uint, comment string) error {
+	taskID, err := s.engine.GetPendingTaskIDByOrder(orderID)
+	if err != nil {
+		return err
 	}
-	return s.engine.GetPendingTasksByUser(userID)
+	if taskID == 0 {
+		return fmt.Errorf("未找到该委托当前待办的任务(task_order_id=%d)", orderID)
+	}
+	return s.engine.ApproveTask(taskID, userID, comment)
 }
 
-// GetProcessHistory returns the task history for a process instance.
-func (s *BusinessService) GetProcessHistory(instanceID uint) ([]map[string]interface{}, error) {
-	return s.engine.GetProcessHistory(instanceID)
-}
-
-// GetInstance returns a process instance by ID.
-func (s *BusinessService) GetInstance(instanceID uint) (map[string]interface{}, error) {
-	return s.engine.GetInstance(instanceID)
-}
-
-// GetNodeDefinitions returns all workflow node definitions.
-func (s *BusinessService) GetNodeDefinitions() []workflow.NodeDefinition {
-	return workflow.GetDefinition()
+// RejectTaskByOrder rejects the current pending task for a task order.
+func (s *BusinessService) RejectTaskByOrder(orderID uint, userID uint, comment string) error {
+	taskID, err := s.engine.GetPendingTaskIDByOrder(orderID)
+	if err != nil {
+		return err
+	}
+	if taskID == 0 {
+		return fmt.Errorf("未找到该委托当前待办的任务(task_order_id=%d)", orderID)
+	}
+	return s.engine.RejectTask(taskID, userID, comment)
 }

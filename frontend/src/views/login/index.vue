@@ -74,6 +74,7 @@ const handleLogin = async () => {
     })
     localStorage.setItem('token', res.data.token)
     localStorage.setItem('username', res.data.user.real_name || res.data.user.username)
+    localStorage.setItem('is_admin', String(res.data.user.is_admin))
     router.push('/dashboard')
   } catch {
     // Error handled by axios interceptor

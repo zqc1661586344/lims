@@ -33,8 +33,14 @@ func (s *WorkflowService) RejectTask(taskID uint, userID uint, comment string) e
 	return s.engine.RejectTask(taskID, userID, comment)
 }
 
-// GetPendingTasks returns pending tasks for a user or department.
-func (s *WorkflowService) GetPendingTasks(deptID *uint, userID uint) ([]map[string]interface{}, error) {
+// GetPendingTasks returns pending tasks.
+//   - isAdmin=true  → all departments' pending tasks (cross-department admin view)
+//   - otherwise, if deptID is set  → that department's pending tasks
+//   - otherwise                  → current user's pending tasks
+func (s *WorkflowService) GetPendingTasks(deptID *uint, userID uint, isAdmin bool) ([]map[string]interface{}, error) {
+	if isAdmin {
+		return s.engine.GetAllPendingTasks()
+	}
 	if deptID != nil && *deptID > 0 {
 		return s.engine.GetPendingTasksByDept(*deptID)
 	}

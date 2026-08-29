@@ -3,7 +3,7 @@
     <el-row :gutter="16">
       <el-col :span="8">
         <TaskList
-          title="部门待办"
+          :title="isAdminUser ? '部门待办（管理员·全部部门）' : '部门待办'"
           :tasks="deptTasks"
           :loading="deptLoading"
           @action="openApproval"
@@ -41,6 +41,7 @@ import ProcessTimeline from '@/components/ProcessTimeline.vue'
 import { getPendingTasksByDept, getPendingTasksByUser, getProcessHistory, getNodeDefinitions } from '@/api/business'
 import type { PendingTask, TimelineNode, NodeDefinition } from '@/api/business'
 import { approveTask, rejectTask } from '@/api/workflow'
+import { isAdmin } from '@/utils/permission'
 
 const deptLoading = ref(false)
 const myLoading = ref(false)
@@ -49,6 +50,7 @@ const myTasks = ref<PendingTask[]>([])
 const selectedInstanceId = ref<number | null>(null)
 const timelineNodes = ref<TimelineNode[]>([])
 const nodeDefs = ref<NodeDefinition[]>([])
+const isAdminUser = isAdmin()
 const approvalDialogRef = ref<InstanceType<typeof ApprovalDialog>>()
 let currentTaskId = 0
 
