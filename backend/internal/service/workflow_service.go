@@ -3,18 +3,21 @@ package service
 import (
 	"lims-backend/internal/workflow"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // WorkflowService wraps the workflow engine with business logic.
 type WorkflowService struct {
+	logger *zap.Logger
 	engine *workflow.Engine
 }
 
 // NewWorkflowService creates a new workflow service.
-func NewWorkflowService(db *gorm.DB) *WorkflowService {
+func NewWorkflowService(logger *zap.Logger, db *gorm.DB) *WorkflowService {
 	return &WorkflowService{
-		engine: workflow.NewEngine(db),
+		logger: logger,
+		engine: workflow.DefaultEngine(db),
 	}
 }
 

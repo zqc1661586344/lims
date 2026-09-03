@@ -6,27 +6,28 @@ import (
 	"lims-backend/internal/middleware"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // RegisterBusinessRoutes registers Phase 6 business process routes.
-func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	taskOrderH := handler.NewTaskOrderHandler(db)
-	contractReviewH := handler.NewContractReviewHandler(db)
-	qcTaskH := handler.NewQCTaskHandler(db)
-	samplingScheduleH := handler.NewSamplingScheduleHandler(db)
-	fieldSamplingH := handler.NewFieldSamplingRecordHandler(db)
-	sampleReceivingH := handler.NewSampleReceivingHandler(db)
-	taskAssignH := handler.NewTaskAssignHandler(db)
-	dataEntryH := handler.NewDataEntryHandler(db)
-	dataReviewH := handler.NewDataReviewHandler(db)
-	dataAuditH := handler.NewDataAuditHandler(db)
-	reportPrepareH := handler.NewReportPrepareHandler(db)
-	reportReviewH := handler.NewReportReviewHandler(db)
-	reportAuditH := handler.NewReportAuditHandler(db)
-	reportSignH := handler.NewReportSignHandler(db)
-	reportPrintH := handler.NewReportPrintHandler(db)
-	projectArchiveH := handler.NewProjectArchiveHandler(db)
+func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.Logger, db *gorm.DB) {
+	taskOrderH := handler.NewTaskOrderHandler(logger, db)
+	contractReviewH := handler.NewContractReviewHandler(logger, db)
+	qcTaskH := handler.NewQCTaskHandler(logger, db)
+	samplingScheduleH := handler.NewSamplingScheduleHandler(logger, db)
+	fieldSamplingH := handler.NewFieldSamplingRecordHandler(logger, db)
+	sampleReceivingH := handler.NewSampleReceivingHandler(logger, db)
+	taskAssignH := handler.NewTaskAssignHandler(logger, db)
+	dataEntryH := handler.NewDataEntryHandler(logger, db)
+	dataReviewH := handler.NewDataReviewHandler(logger, db)
+	dataAuditH := handler.NewDataAuditHandler(logger, db)
+	reportPrepareH := handler.NewReportPrepareHandler(logger, db)
+	reportReviewH := handler.NewReportReviewHandler(logger, db)
+	reportAuditH := handler.NewReportAuditHandler(logger, db)
+	reportSignH := handler.NewReportSignHandler(logger, db)
+	reportPrintH := handler.NewReportPrintHandler(logger, db)
+	projectArchiveH := handler.NewProjectArchiveHandler(logger, db)
 
 	group := r.Group("/business")
 	group.Use(middleware.AuthMiddleware(cfg))

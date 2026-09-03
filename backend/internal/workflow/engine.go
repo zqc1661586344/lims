@@ -3,6 +3,8 @@ package workflow
 import (
 	"errors"
 	"fmt"
+	"lims-backend/internal/model"
+	"sync"
 
 	"gorm.io/gorm"
 )
@@ -14,6 +16,11 @@ type Engine struct {
 	nodeMap  map[string]NodeDefinition
 }
 
+var (
+	defaultEngineOnce sync.Once
+	defaultEngine     *Engine
+)
+
 // NewEngine creates a new workflow engine with the given GORM DB.
 func NewEngine(db *gorm.DB) *Engine {
 	defs := GetDefinition()
@@ -24,6 +31,15 @@ func NewEngine(db *gorm.DB) *Engine {
 	}
 }
 
+// DefaultEngine returns a process-wide singleton Engine.
+// The first call lazily initializes it; subsequent calls return the same instance.
+func DefaultEngine(db *gorm.DB) *Engine {
+	defaultEngineOnce.Do(func() {
+		defaultEngine = NewEngine(db)
+	})
+	return defaultEngine
+}
+
 // StartInstance creates a new process instance and its first task.
 // Returns the instance ID.
 func (e *Engine) StartInstance(businessType string, businessID uint, title string, createdBy uint) (uint, error) {
@@ -32,14 +48,7 @@ func (e *Engine) StartInstance(businessType string, businessID uint, title strin
 	}
 	firstNode := e.nodeDefs[0]
 
-	instance := struct {
-		BusinessType string
-		BusinessID   uint
-		Title        string
-		CurrentNode  string
-		Status       string
-		CreatedBy    uint
-	}{
+	instance := &model.ProcessInstance{
 		BusinessType: businessType,
 		BusinessID:   businessID,
 		Title:        title,
@@ -48,153 +57,149 @@ func (e *Engine) StartInstance(businessType string, businessID uint, title strin
 		CreatedBy:    createdBy,
 	}
 
-	if err := e.db.Exec(`INSERT INTO process_instances
-		(business_type, business_id, title, current_node, status, created_by, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-		instance.BusinessType, instance.BusinessID, instance.Title,
-		instance.CurrentNode, instance.Status, instance.CreatedBy).
-		Error; err != nil {
+	if err := e.db.Create(instance).Error; err != nil {
 		return 0, fmt.Errorf("create process instance: %w", err)
 	}
 
-	// Retrieve the ID of the newly created instance
-	var instanceID uint
-	if err := e.db.Raw(`SELECT id FROM process_instances
-		WHERE business_type=? AND business_id=? ORDER BY created_at DESC LIMIT 1`,
-		businessType, businessID).Scan(&instanceID).Error; err != nil {
-		return 0, fmt.Errorf("get instance id: %w", err)
-	}
-
-	// Create the first task
-	if err := e.createTask(instanceID, firstNode.Code, firstNode.Name, 0); err != nil {
+	if err := e.createTask(instance.ID, firstNode.Code, firstNode.Name, 0); err != nil {
 		return 0, fmt.Errorf("create first task: %w", err)
 	}
 
-	return instanceID, nil
+	return instance.ID, nil
 }
 
 // ApproveTask approves a pending task, creating the next node's task.
 // If the approved node is the terminal node, the instance is marked completed.
 func (e *Engine) ApproveTask(taskID uint, userID uint, comment string) error {
 	return e.db.Transaction(func(tx *gorm.DB) error {
-		// Fetch the task with optimistic lock check
-		task, err := e.getTaskForUpdate(tx, taskID)
-		if err != nil {
-			return err
-		}
-		if task.Status != TaskStatusPending {
-			return ErrTaskAlreadyCompleted
-		}
+		return e.ApproveTaskWithTx(tx, taskID, userID, comment)
+	})
+}
 
-		// Fetch the instance
-		var instance struct {
-			ID          uint
-			CurrentNode string
-			Status      string
-			Version     int
-		}
-		if err := tx.Raw(`SELECT id, current_node, status FROM process_instances
-			WHERE id=? FOR UPDATE`, task.ProcessInstanceID).Scan(&instance).Error; err != nil {
-			return fmt.Errorf("get instance: %w", err)
-		}
-		if instance.Status != InstanceStatusRunning {
-			return ErrInstanceNotRunning
-		}
+// ApproveTaskWithTx is the transaction-aware core of ApproveTask.
+// The caller is responsible for starting and committing the transaction.
+func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, comment string) error {
+	task, err := e.getTaskForUpdate(tx, taskID)
+	if err != nil {
+		return err
+	}
+	if task.Status != TaskStatusPending {
+		return ErrTaskAlreadyCompleted
+	}
 
-		nodeDef, ok := e.nodeMap[task.NodeCode]
+	// Fetch the instance
+	var instance struct {
+		ID          uint
+		CurrentNode string
+		Status      string
+	}
+	if err := tx.Raw(`SELECT id, current_node, status FROM process_instances
+		WHERE id=? FOR UPDATE`, task.ProcessInstanceID).Scan(&instance).Error; err != nil {
+		return fmt.Errorf("get instance: %w", err)
+	}
+	if instance.Status != InstanceStatusRunning {
+		return ErrInstanceNotRunning
+	}
+
+	nodeDef, ok := e.nodeMap[task.NodeCode]
+	if !ok {
+		return ErrUnknownNode
+	}
+
+	// Mark current task as completed
+	if err := tx.Exec(`UPDATE process_tasks SET status=?, comment=?, updated_at=NOW()
+		WHERE id=?`,
+		TaskStatusCompleted, comment, taskID).Error; err != nil {
+		return fmt.Errorf("update task: %w", err)
+	}
+
+	nextNode := nodeDef.NextNode
+	if nextNode == "" {
+		// Terminal node — complete the instance
+		if err := tx.Exec(`UPDATE process_instances SET status=?, current_node=?, updated_at=NOW()
+			WHERE id=?`, InstanceStatusCompleted, task.NodeCode, instance.ID).Error; err != nil {
+			return fmt.Errorf("complete instance: %w", err)
+		}
+	} else {
+		// Create the next task
+		nextDef, ok := e.nodeMap[nextNode]
 		if !ok {
 			return ErrUnknownNode
 		}
-
-		// Mark current task as completed
-		if err := tx.Exec(`UPDATE process_tasks SET status=?, comment=?, updated_at=NOW(), version=version+1
-			WHERE id=? AND version=?`,
-			TaskStatusCompleted, comment, taskID, task.Version).Error; err != nil {
-			return fmt.Errorf("update task: %w", err)
+		if err := e.createTaskWithTx(tx, instance.ID, nextNode, nextDef.Name, 0); err != nil {
+			return err
 		}
-
-		nextNode := nodeDef.NextNode
-		if nextNode == "" {
-			// Terminal node — complete the instance
-			if err := tx.Exec(`UPDATE process_instances SET status=?, current_node=?, updated_at=NOW()
-				WHERE id=?`, InstanceStatusCompleted, task.NodeCode, instance.ID).Error; err != nil {
-				return fmt.Errorf("complete instance: %w", err)
-			}
-		} else {
-			// Create the next task
-			nextDef, ok := e.nodeMap[nextNode]
-			if !ok {
-				return ErrUnknownNode
-			}
-			if err := e.createTaskWithTx(tx, instance.ID, nextNode, nextDef.Name, 0); err != nil {
-				return err
-			}
-			// Advance the instance current node
-			if err := tx.Exec(`UPDATE process_instances SET current_node=?, updated_at=NOW()
-				WHERE id=?`, nextNode, instance.ID).Error; err != nil {
-				return fmt.Errorf("advance instance: %w", err)
-			}
+		// Advance the instance current node
+		if err := tx.Exec(`UPDATE process_instances SET current_node=?, updated_at=NOW()
+			WHERE id=?`, nextNode, instance.ID).Error; err != nil {
+			return fmt.Errorf("advance instance: %w", err)
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // RejectTask rejects a pending task, creating a new pending task for the
 // rejection target node (typically the previous node in the workflow).
 func (e *Engine) RejectTask(taskID uint, userID uint, comment string) error {
 	return e.db.Transaction(func(tx *gorm.DB) error {
-		task, err := e.getTaskForUpdate(tx, taskID)
-		if err != nil {
-			return err
-		}
-		if task.Status != TaskStatusPending {
-			return ErrTaskAlreadyCompleted
-		}
-
-		nodeDef, ok := e.nodeMap[task.NodeCode]
-		if !ok {
-			return ErrUnknownNode
-		}
-		if !nodeDef.CanReject {
-			return ErrCannotRejectFinalNode
-		}
-
-		rejectTarget := nodeDef.RejectTarget
-		if rejectTarget == "" {
-			return ErrCannotRejectFromFirstNode
-		}
-
-		// Fetch the instance
-		var instanceID uint
-		if err := tx.Raw(`SELECT id FROM process_instances WHERE id=? FOR UPDATE`,
-			task.ProcessInstanceID).Scan(&instanceID).Error; err != nil {
-			return fmt.Errorf("get instance: %w", err)
-		}
-
-		// Mark current task as rejected
-		if err := tx.Exec(`UPDATE process_tasks SET status=?, comment=?, updated_at=NOW(), version=version+1
-			WHERE id=? AND version=?`,
-			TaskStatusRejected, comment, taskID, task.Version).Error; err != nil {
-			return fmt.Errorf("update task rejected: %w", err)
-		}
-
-		// Create a new pending task for the reject target node
-		targetDef, ok := e.nodeMap[rejectTarget]
-		if !ok {
-			return ErrUnknownNode
-		}
-		if err := e.createTaskWithTx(tx, instanceID, rejectTarget, targetDef.Name, 0); err != nil {
-			return err
-		}
-
-		// Update instance current node back to reject target
-		if err := tx.Exec(`UPDATE process_instances SET current_node=?, updated_at=NOW()
-			WHERE id=?`, rejectTarget, instanceID).Error; err != nil {
-			return fmt.Errorf("revert instance node: %w", err)
-		}
-
-		return nil
+		return e.RejectTaskWithTx(tx, taskID, userID, comment)
 	})
+}
+
+// RejectTaskWithTx is the transaction-aware core of RejectTask.
+// The caller is responsible for starting and committing the transaction.
+func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, comment string) error {
+	task, err := e.getTaskForUpdate(tx, taskID)
+	if err != nil {
+		return err
+	}
+	if task.Status != TaskStatusPending {
+		return ErrTaskAlreadyCompleted
+	}
+
+	nodeDef, ok := e.nodeMap[task.NodeCode]
+	if !ok {
+		return ErrUnknownNode
+	}
+	if !nodeDef.CanReject {
+		return ErrCannotRejectFinalNode
+	}
+
+	rejectTarget := nodeDef.RejectTarget
+	if rejectTarget == "" {
+		return ErrCannotRejectFromFirstNode
+	}
+
+	// Fetch the instance
+	var instanceID uint
+	if err := tx.Raw(`SELECT id FROM process_instances WHERE id=? FOR UPDATE`,
+		task.ProcessInstanceID).Scan(&instanceID).Error; err != nil {
+		return fmt.Errorf("get instance: %w", err)
+	}
+
+	// Mark current task as rejected
+	if err := tx.Exec(`UPDATE process_tasks SET status=?, comment=?, updated_at=NOW()
+		WHERE id=?`,
+		TaskStatusRejected, comment, taskID).Error; err != nil {
+		return fmt.Errorf("update task rejected: %w", err)
+	}
+
+	// Create a new pending task for the reject target node
+	targetDef, ok := e.nodeMap[rejectTarget]
+	if !ok {
+		return ErrUnknownNode
+	}
+	if err := e.createTaskWithTx(tx, instanceID, rejectTarget, targetDef.Name, 0); err != nil {
+		return err
+	}
+
+	// Update instance current node back to reject target
+	if err := tx.Exec(`UPDATE process_instances SET current_node=?, updated_at=NOW()
+		WHERE id=?`, rejectTarget, instanceID).Error; err != nil {
+		return fmt.Errorf("revert instance node: %w", err)
+	}
+
+	return nil
 }
 
 // GetPendingTasksByUser returns all pending tasks assigned to a specific user.
@@ -281,8 +286,12 @@ func (e *Engine) deptNameMap() map[string]string {
 // instance for that business and finds its active pending task.
 // Returns 0 (no error) if no pending task is found.
 func (e *Engine) getPendingTaskIDByBusiness(businessType string, businessID uint) (uint, error) {
+	return e.getPendingTaskIDByBusinessWithTx(e.db, businessType, businessID)
+}
+
+func (e *Engine) getPendingTaskIDByBusinessWithTx(tx *gorm.DB, businessType string, businessID uint) (uint, error) {
 	var taskID uint
-	err := e.db.Raw(`
+	err := tx.Raw(`
 		SELECT pt.id
 		FROM process_tasks pt
 		JOIN process_instances pi ON pi.id = pt.process_instance_id
@@ -302,6 +311,11 @@ func (e *Engine) getPendingTaskIDByBusiness(businessType string, businessID uint
 // Exposed for business appovals that only know the task_order_id.
 func (e *Engine) GetPendingTaskIDByOrder(orderID uint) (uint, error) {
 	return e.getPendingTaskIDByBusiness("task_order", orderID)
+}
+
+// GetPendingTaskIDByOrderTx is the transaction-aware version of GetPendingTaskIDByOrder.
+func (e *Engine) GetPendingTaskIDByOrderTx(tx *gorm.DB, orderID uint) (uint, error) {
+	return e.getPendingTaskIDByBusinessWithTx(tx, "task_order", orderID)
 }
 
 // GetProcessHistory returns the full task history for a process instance.
@@ -362,11 +376,11 @@ func (e *Engine) GetInstance(instanceID uint) (map[string]interface{}, error) {
 // --- internal helpers ---
 
 type taskRow struct {
-	ID               uint
+	ID                uint
 	ProcessInstanceID uint
-	NodeCode         string
-	Status           string
-	Version          int
+	NodeCode          string
+	Status            string
+	Version           int
 }
 
 func (e *Engine) getTaskForUpdate(tx *gorm.DB, taskID uint) (*taskRow, error) {
@@ -392,17 +406,20 @@ func (e *Engine) createTaskWithTx(tx *gorm.DB, instanceID uint, nodeCode, nodeNa
 		return ErrUnknownNode
 	}
 
-	// Map department code to actual dept_id
-	// We store the dept_code as a reference; the actual dept_id is resolved at creation
-	_ = deptID // deptID is kept for future refinement
+	// Resolve department code to actual dept_id
+	var resolvedDeptID uint
+	if err := tx.Raw(`SELECT id FROM depts WHERE code = ?`, def.DeptCode).Scan(&resolvedDeptID).Error; err != nil {
+		return fmt.Errorf("resolve dept: %w", err)
+	}
 
-	return tx.Exec(`INSERT INTO process_tasks
-		(process_instance_id, node_code, node_name, assignee_dept_id,
-		 status, created_at, updated_at, version)
-		VALUES (?, ?, ?,
-			(SELECT id FROM depts WHERE code = ?),
-			'pending', NOW(), NOW(), 0)`,
-		instanceID, nodeCode, nodeName, def.DeptCode).Error
+	return tx.Create(&model.ProcessTask{
+		ProcessInstanceID: instanceID,
+		NodeCode:          nodeCode,
+		NodeName:          nodeName,
+		AssigneeDeptID:    &resolvedDeptID,
+		Status:            TaskStatusPending,
+		Version:           0,
+	}).Error
 }
 
 func (e *Engine) queryTasks(query string, args ...interface{}) ([]map[string]interface{}, error) {

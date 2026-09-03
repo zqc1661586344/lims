@@ -372,11 +372,11 @@ func (h *EquipmentHandler) Create(c *gin.Context) {
 	}
 
 	equip := model.Equipment{
-		Name:   req.Name,
-		Code:   req.Code,
-		Model:  req.Model,
+		Name:    req.Name,
+		Code:    req.Code,
+		Model:   req.Model,
 		Factory: req.Factory,
-		Status: req.Status,
+		Status:  req.Status,
 	}
 	if equip.Status == 0 {
 		equip.Status = 1

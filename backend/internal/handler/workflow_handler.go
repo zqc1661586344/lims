@@ -7,18 +7,21 @@ import (
 	"lims-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // WorkflowHandler handles workflow-related HTTP requests.
 type WorkflowHandler struct {
-	svc *service.WorkflowService
+	logger *zap.Logger
+	svc    *service.WorkflowService
 }
 
 // NewWorkflowHandler creates a new workflow handler.
-func NewWorkflowHandler(db *gorm.DB) *WorkflowHandler {
+func NewWorkflowHandler(logger *zap.Logger, db *gorm.DB) *WorkflowHandler {
 	return &WorkflowHandler{
-		svc: service.NewWorkflowService(db),
+		logger: logger,
+		svc:    service.NewWorkflowService(logger, db),
 	}
 }
 

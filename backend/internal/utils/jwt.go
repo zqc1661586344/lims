@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"time"
 
 	"lims-backend/internal/config"
@@ -10,23 +12,33 @@ import (
 
 // Claims holds the JWT token claims.
 type Claims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	DeptID   *uint  `json:"dept_id"`
-	IsAdmin  bool   `json:"is_admin"`
+	UserID      uint     `json:"user_id"`
+	Username    string   `json:"username"`
+	DeptID      *uint    `json:"dept_id"`
+	IsAdmin     bool     `json:"is_admin"`
+	Permissions []string `json:"permissions,omitempty"`
 	jwt.RegisteredClaims
 }
 
+func generateJTI() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 // GenerateToken creates a JWT token for the given user.
-func GenerateToken(cfg *config.JWTConfig, userID uint, username string, deptID *uint, isAdmin bool) (string, error) {
+func GenerateToken(cfg *config.JWTConfig, userID uint, username string, deptID *uint, isAdmin bool, permissions []string) (string, error) {
 	now := time.Now()
+	exp := now.Add(time.Duration(cfg.ExpireHour) * time.Hour)
 	claims := Claims{
-		UserID:   userID,
-		Username: username,
-		DeptID:   deptID,
-		IsAdmin:  isAdmin,
+		UserID:      userID,
+		Username:    username,
+		DeptID:      deptID,
+		IsAdmin:     isAdmin,
+		Permissions: permissions,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(cfg.ExpireHour) * time.Hour)),
+			ID:        generateJTI(),
+			ExpiresAt: jwt.NewNumericDate(exp),
 			IssuedAt:  jwt.NewNumericDate(now),
 			Issuer:    cfg.Issuer,
 		},

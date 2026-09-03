@@ -6,12 +6,13 @@ import (
 	"lims-backend/internal/middleware"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // RegisterWorkflowRoutes registers workflow engine routes (Phase 5).
-func RegisterWorkflowRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	wfH := handler.NewWorkflowHandler(db)
+func RegisterWorkflowRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.Logger, db *gorm.DB) {
+	wfH := handler.NewWorkflowHandler(logger, db)
 
 	group := r.Group("/workflow")
 	group.Use(middleware.AuthMiddleware(cfg))

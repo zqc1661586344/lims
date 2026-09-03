@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -82,5 +84,75 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// Apply defaults for zero values
+	cfg.applyDefaults()
+
+	// Validate critical configuration
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
+
 	return &cfg, nil
+}
+
+func (c *Config) applyDefaults() {
+	if c.Env == "" {
+		c.Env = "development"
+	}
+	if c.Server.Port == 0 {
+		c.Server.Port = 8080
+	}
+	if c.Database.Port == 0 {
+		c.Database.Port = 5432
+	}
+	if c.Database.SSLMode == "" {
+		c.Database.SSLMode = "disable"
+	}
+	if c.Database.MaxIdleConns == 0 {
+		c.Database.MaxIdleConns = 10
+	}
+	if c.Database.MaxOpenConns == 0 {
+		c.Database.MaxOpenConns = 100
+	}
+	if c.Database.ConnMaxLifetime == 0 {
+		c.Database.ConnMaxLifetime = 30
+	}
+	if c.JWT.ExpireHour == 0 {
+		c.JWT.ExpireHour = 24
+	}
+	if c.JWT.Issuer == "" {
+		c.JWT.Issuer = "lims-system"
+	}
+}
+
+func (c *Config) validate() error {
+	var errs []string
+
+	if c.Server.Port < 1 || c.Server.Port > 65535 {
+		errs = append(errs, "server.port must be between 1 and 65535")
+	}
+
+	if c.Database.Host == "" {
+		errs = append(errs, "database.host is required")
+	}
+	if c.Database.User == "" {
+		errs = append(errs, "database.user is required")
+	}
+	if c.Database.DBName == "" {
+		errs = append(errs, "database.dbname is required")
+	}
+
+	if c.JWT.Secret == "" {
+		errs = append(errs, "jwt.secret is required")
+	} else if c.Env == "production" && (c.JWT.Secret == "lims-jwt-secret-change-in-production" || len(c.JWT.Secret) < 32) {
+		errs = append(errs, "jwt.secret must be at least 32 chars and not use default value in production")
+	}
+	if c.JWT.ExpireHour < 1 {
+		errs = append(errs, "jwt.expire_hour must be >= 1")
+	}
+
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
 }

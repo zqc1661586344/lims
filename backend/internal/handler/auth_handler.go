@@ -49,12 +49,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// Collect permission codes from all roles
+	permissions, err := h.loadUserPermissions(user.ID, user.IsAdmin)
+	if err != nil {
+		utils.InternalError(c, "加载用户权限失败")
+		return
+	}
+
 	token, err := utils.GenerateToken(
 		&h.cfg.JWT,
 		user.ID,
 		user.Username,
 		user.DeptID,
 		user.IsAdmin,
+		permissions,
 	)
 	if err != nil {
 		utils.InternalError(c, "生成令牌失败")
@@ -93,6 +101,15 @@ func (h *AuthHandler) Profile(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
+	jti := c.GetString("jti")
+	expVal, _ := c.Get("exp")
+	if jti != "" {
+		if exp, ok := expVal.(time.Time); ok {
+			utils.GetTokenBlacklist().Revoke(jti, exp)
+		} else {
+			utils.GetTokenBlacklist().Revoke(jti, time.Now().Add(time.Hour))
+		}
+	}
 	utils.Success(c, nil)
 }
 
@@ -101,12 +118,34 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	username := c.GetString("username")
 	deptID := middleware.GetDeptID(c)
 	isAdmin := middleware.IsAdmin(c)
+	permissions := middleware.GetPermissions(c)
 
-	token, err := utils.GenerateToken(&h.cfg.JWT, userID, username, deptID, isAdmin)
+	token, err := utils.GenerateToken(&h.cfg.JWT, userID, username, deptID, isAdmin, permissions)
 	if err != nil {
 		utils.InternalError(c, "刷新令牌失败")
 		return
 	}
 
 	utils.Success(c, gin.H{"token": token})
+}
+
+// loadUserPermissions queries all permission codes granted to the user via roles.
+// Admin users get an empty list (admin bypasses all permission checks).
+func (h *AuthHandler) loadUserPermissions(userID uint, isAdmin bool) ([]string, error) {
+	if isAdmin {
+		return nil, nil
+	}
+
+	var codes []string
+	err := h.db.Table("permissions").
+		Select("permissions.code").
+		Joins("JOIN role_permissions ON role_permissions.permission_id = permissions.id").
+		Joins("JOIN user_roles ON user_roles.role_id = role_permissions.role_id").
+		Where("user_roles.user_id = ?", userID).
+		Distinct().
+		Scan(&codes).Error
+	if err != nil {
+		return nil, err
+	}
+	return codes, nil
 }

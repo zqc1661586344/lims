@@ -4,19 +4,22 @@ import (
 	"fmt"
 	"lims-backend/internal/workflow"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // BusinessService wraps the workflow engine for Phase 6 business flow operations.
 type BusinessService struct {
+	logger *zap.Logger
 	engine *workflow.Engine
 	db     *gorm.DB
 }
 
 // NewBusinessService creates a new business service.
-func NewBusinessService(db *gorm.DB) *BusinessService {
+func NewBusinessService(logger *zap.Logger, db *gorm.DB) *BusinessService {
 	return &BusinessService{
-		engine: workflow.NewEngine(db),
+		logger: logger,
+		engine: workflow.DefaultEngine(db),
 		db:     db,
 	}
 }
@@ -60,4 +63,44 @@ func (s *BusinessService) RejectTaskByOrder(orderID uint, userID uint, comment s
 		return fmt.Errorf("未找到该委托当前待办的任务(task_order_id=%d)", orderID)
 	}
 	return s.engine.RejectTask(taskID, userID, comment)
+}
+
+// ApproveWithBusiness executes a business save callback and workflow approval
+// inside a single transaction to guarantee data consistency.
+func (s *BusinessService) ApproveWithBusiness(orderID uint, userID uint, comment string, save func(tx *gorm.DB) error) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if save != nil {
+			if err := save(tx); err != nil {
+				return err
+			}
+		}
+		taskID, err := s.engine.GetPendingTaskIDByOrderTx(tx, orderID)
+		if err != nil {
+			return err
+		}
+		if taskID == 0 {
+			return fmt.Errorf("未找到该委托当前待办的任务(task_order_id=%d)", orderID)
+		}
+		return s.engine.ApproveTaskWithTx(tx, taskID, userID, comment)
+	})
+}
+
+// RejectWithBusiness executes a business save callback and workflow rejection
+// inside a single transaction to guarantee data consistency.
+func (s *BusinessService) RejectWithBusiness(orderID uint, userID uint, comment string, save func(tx *gorm.DB) error) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if save != nil {
+			if err := save(tx); err != nil {
+				return err
+			}
+		}
+		taskID, err := s.engine.GetPendingTaskIDByOrderTx(tx, orderID)
+		if err != nil {
+			return err
+		}
+		if taskID == 0 {
+			return fmt.Errorf("未找到该委托当前待办的任务(task_order_id=%d)", orderID)
+		}
+		return s.engine.RejectTaskWithTx(tx, taskID, userID, comment)
+	})
 }

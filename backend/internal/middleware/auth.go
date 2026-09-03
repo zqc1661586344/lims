@@ -34,11 +34,23 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
+		// Check if token has been revoked (logged out)
+		if utils.GetTokenBlacklist().IsRevoked(claims.ID) {
+			utils.Unauthorized(c, "token has been revoked")
+			c.Abort()
+			return
+		}
+
 		// Store user info in context
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("dept_id", claims.DeptID)
 		c.Set("is_admin", claims.IsAdmin)
+		c.Set("permissions", claims.Permissions)
+		c.Set("jti", claims.ID)
+		if claims.ExpiresAt != nil {
+			c.Set("exp", claims.ExpiresAt.Time)
+		}
 
 		c.Next()
 	}
@@ -69,4 +81,13 @@ func IsAdmin(c *gin.Context) bool {
 		return false
 	}
 	return admin.(bool)
+}
+
+// GetPermissions extracts the permission codes from the Gin context.
+func GetPermissions(c *gin.Context) []string {
+	perms, _ := c.Get("permissions")
+	if perms == nil {
+		return nil
+	}
+	return perms.([]string)
 }

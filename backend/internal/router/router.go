@@ -18,8 +18,12 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Auto-migrate database tables
-	autoMigrate(db)
+	// Auto-migrate database tables (skip in production to avoid unintended schema changes)
+	if cfg.Env != "production" {
+		autoMigrate(logger, db)
+	} else {
+		logger.Warn("skipping AutoMigrate in production environment")
+	}
 
 	// Register audit plugin (GORM hooks for data change tracking)
 	auditPlugin := middleware.NewAuditPlugin(logger)
@@ -55,15 +59,16 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 		// Register base data routes
 		routes.RegisterBaseDataRoutes(api, cfg, db)
 		// Register workflow routes
-		routes.RegisterWorkflowRoutes(api, cfg, db)
+		routes.RegisterWorkflowRoutes(api, cfg, logger, db)
 		// Register business routes (Phase 6)
-		routes.RegisterBusinessRoutes(api, cfg, db)
+		routes.RegisterBusinessRoutes(api, cfg, logger, db)
 	}
 
 	return r
 }
 
-func autoMigrate(db *gorm.DB) {
+func autoMigrate(logger *zap.Logger, db *gorm.DB) {
+	logger.Info("running AutoMigrate to create/update tables")
 	db.AutoMigrate(
 		&model.User{},
 		&model.Dept{},
