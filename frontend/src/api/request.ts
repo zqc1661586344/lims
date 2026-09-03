@@ -7,7 +7,6 @@ const request = axios.create({
   timeout: 15000,
 })
 
-// Request interceptor — attach token
 request.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token')
@@ -19,28 +18,30 @@ request.interceptors.request.use(
   (error) => Promise.reject(error),
 )
 
-// Response interceptor — handle errors
 request.interceptors.response.use(
   (response) => response.data,
   (error) => {
     const status = error.response?.status
     const msg = error.response?.data?.message || error.message
+    const silent = error.config?.silentError
 
-    switch (status) {
-      case 401:
-        localStorage.removeItem('token')
-        sessionStorage.removeItem('token')
-        router.push('/login')
-        ElMessage.error('登录已过期，请重新登录')
-        break
-      case 403:
-        ElMessage.error('无权限访问')
-        break
-      case 500:
-        ElMessage.error('服务器异常')
-        break
-      default:
-        ElMessage.error(msg || '请求失败')
+    if (!silent) {
+      switch (status) {
+        case 401:
+          localStorage.removeItem('token')
+          sessionStorage.removeItem('token')
+          router.push('/login')
+          ElMessage.error('登录已过期，请重新登录')
+          break
+        case 403:
+          ElMessage.error('无权限访问')
+          break
+        case 500:
+          ElMessage.error('服务器异常')
+          break
+        default:
+          ElMessage.error(msg || '请求失败')
+      }
     }
 
     return Promise.reject(error)

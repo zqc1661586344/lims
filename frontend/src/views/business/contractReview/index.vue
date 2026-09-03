@@ -52,39 +52,18 @@
       </template>
     </el-dialog>
 
-    <!-- Approve dialog -->
-    <el-dialog v-model="approveVisible" title="合同评审 - 通过" width="500px">
-      <el-form ref="approveFormRef" :model="approveForm" label-width="100px">
-        <el-form-item label="委托ID">{{ approveForm.task_order_id }}</el-form-item>
-        <el-form-item label="评审结果">
-          <el-tag type="success" size="default">通过</el-tag>
-        </el-form-item>
-        <el-form-item label="评审意见">
-          <el-input v-model="approveForm.comment" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item label="合同文件">
-          <el-input v-model="approveForm.contract_file_path" placeholder="上传后路径" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="approveVisible = false">取消</el-button>
-        <el-button type="primary" :loading="approving" @click="handleApprove">确认通过</el-button>
+    <ApprovalDialog ref="approvalRef" title="合同评审审批" width="500px" @submit="handleApprovalSubmit">
+      <template #header>
+        <div class="approval-header">
+          <span>委托ID：{{ currentRow?.task_order_id }}</span>
+        </div>
       </template>
-    </el-dialog>
-
-    <!-- Reject dialog -->
-    <el-dialog v-model="rejectVisible" title="合同评审 - 驳回" width="500px">
-      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules" label-width="100px">
-        <el-form-item label="委托ID">{{ rejectForm.task_order_id }}</el-form-item>
-        <el-form-item label="驳回原因" prop="comment">
-          <el-input v-model="rejectForm.comment" type="textarea" :rows="3" placeholder="请填写驳回原因" />
+      <template #extraFields>
+        <el-form-item label="合同文件" v-if="approvalForm.action === 'approve'">
+          <el-input v-model="approveExtra.contract_file_path" placeholder="上传后路径" />
         </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="rejectVisible = false">取消</el-button>
-        <el-button type="danger" :loading="rejecting" @click="handleReject">确认驳回</el-button>
       </template>
-    </el-dialog>
+    </ApprovalDialog>
   </div>
 </template>
 
@@ -92,6 +71,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { getContractReviewList, getContractReview, createContractReview, updateContractReview, deleteContractReview, approveContractReview, rejectContractReview } from '@/api/business'
 import type { ContractReview } from '@/api/business'
 
@@ -111,7 +91,6 @@ async function loadData() {
   } finally { loading.value = false }
 }
 
-// --- Form dialog ---
 const formVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref<FormInstance>()
@@ -147,44 +126,45 @@ async function handleDelete(id: number) {
   await deleteContractReview(id); ElMessage.success('删除成功'); await loadData()
 }
 
-// --- Approve ---
-const approveVisible = ref(false)
-const approveFormRef = ref<FormInstance>()
-const approving = ref(false)
-const approveForm = reactive({ task_order_id: 0, id: 0, comment: '', contract_file_path: '' })
+const approvalRef = ref<InstanceType<typeof ApprovalDialog>>()
+const currentRow = ref<ContractReview | null>(null)
+const approvalForm = reactive({ action: 'approve' as 'approve' | 'reject' })
+const approveExtra = reactive({ contract_file_path: '' })
+
 function openApprove(row: ContractReview) {
-  approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.comment = ''; approveForm.contract_file_path = row.contract_file_path
-  approveVisible.value = true
+  currentRow.value = row
+  approveExtra.contract_file_path = row.contract_file_path
+  approvalForm.action = 'approve'
+  approvalRef.value?.open('approve')
 }
-async function handleApprove() {
-  approving.value = true
-  try {
-    await approveContractReview(approveForm.id, { task_id: approveForm.task_order_id, review_comment: approveForm.comment, contract_file_path: approveForm.contract_file_path })
-    ElMessage.success('评审通过，流程已推进')
-    approveVisible.value = false; await loadData()
-  } catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { approving.value = false }
+function openReject(row: ContractReview) {
+  currentRow.value = row
+  approvalForm.action = 'reject'
+  approvalRef.value?.open('reject')
 }
 
-// --- Reject ---
-const rejectVisible = ref(false)
-const rejectFormRef = ref<FormInstance>()
-const rejecting = ref(false)
-const rejectForm = reactive({ task_order_id: 0, id: 0, comment: '' })
-const rejectRules: FormRules = { comment: [{ required: true, message: '请填写驳回原因', trigger: 'blur' }] }
-function openReject(row: ContractReview) {
-  rejectForm.id = row.id; rejectForm.task_order_id = row.task_order_id; rejectForm.comment = ''
-  rejectVisible.value = true
-}
-async function handleReject() {
-  const valid = await rejectFormRef.value?.validate().catch(() => false)
-  if (!valid) return
-  rejecting.value = true
-  try {
-    await rejectContractReview(rejectForm.id, { task_id: rejectForm.task_order_id, review_comment: rejectForm.comment })
+async function handleApprovalSubmit(data: { action: string; comment: string }) {
+  if (!currentRow.value) return
+  const id = currentRow.value.id
+  const taskId = currentRow.value.task_order_id
+  if (data.action === 'approve') {
+    await approveContractReview(id, { task_id: taskId, review_comment: data.comment, contract_file_path: approveExtra.contract_file_path })
+    ElMessage.success('评审通过，流程已推进')
+  } else {
+    await rejectContractReview(id, { task_id: taskId, review_comment: data.comment })
     ElMessage.success('已驳回')
-    rejectVisible.value = false; await loadData()
-  } catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { rejecting.value = false }
+  }
+  await loadData()
 }
 </script>
+
+<style scoped>
+.approval-header {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #606266;
+}
+</style>

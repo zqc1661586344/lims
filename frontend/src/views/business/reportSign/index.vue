@@ -64,75 +64,57 @@
       </template>
     </el-dialog>
 
-    <!-- Approve dialog -->
-    <el-dialog v-model="approveVisible" title="报告签发 - 通过" width="680px">
-      <el-form :model="approveForm" label-width="100px">
-        <!-- 报告审核签发单（D15）承接预览：汇聚编制/复核/审核意见及实验原始记录 -->
-        <el-alert v-if="sourceReport" type="info" :closable="false" title="报告审核签发单 - 承接报告" class="source-report-alert">
-          <div class="source-report-body">
-            <div><b>报告编号：</b>{{ sourceReport.report_no || '（未填写）' }}</div>
-            <div><b>报告标题：</b>{{ sourceReport.report_title || '（未填写）' }}</div>
-            <div><b>报告文件：</b>{{ sourceReport.report_file || '（无）' }}</div>
-            <div v-if="sourceReport.report_content"><b>报告内容：</b>{{ sourceReport.report_content }}</div>
-          </div>
-        </el-alert>
-        <el-alert v-else-if="approveForm.task_order_id && sourceLoaded" type="warning" :closable="false" title="未找到关联的报告编制记录，请确认委托ID是否正确" class="source-report-alert" />
-        <!-- 报告审核签发单：展示编制人意见（后端 aggregateSignSlip 已汇聚到 report_prepares.prepare_opinion） -->
-        <el-form-item label="编制人意见" v-if="sourceReport">
-          <el-input :model-value="sourceReport.prepare_opinion || '（未填写）'" type="textarea" :rows="2" readonly />
-        </el-form-item>
-        <el-form-item label="实验原始记录">
-          <div class="raw-records-panel">
-            <el-table :data="rawEntries" size="small" border empty-text="暂无实验原始记录" max-height="180">
-              <el-table-column prop="id" label="ID" width="60" />
-              <el-table-column prop="test_item_id" label="检测项目ID" width="100" />
-              <el-table-column prop="original_data" label="原始数据" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="created_at" label="录入时间" width="170" />
-            </el-table>
-          </div>
-        </el-form-item>
-        <el-form-item label="委托ID">{{ approveForm.task_order_id }}</el-form-item>
-        <el-form-item label="报告编号">
-          <el-input v-model="approveForm.report_no" placeholder="报告编号（沿用报告编制赋号）" />
-        </el-form-item>
-        <el-form-item label="签发结果">
-          <el-select v-model="approveForm.sign_result" placeholder="选择结果" style="width:100%">
-            <el-option label="通过" value="通过" />
-            <el-option label="驳回" value="驳回" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="签发人">
-          <el-input v-model="approveForm.signer_name" placeholder="签发人姓名" />
-        </el-form-item>
-        <el-form-item label="签发日期">
-          <el-date-picker v-model="approveForm.sign_date" type="date" placeholder="选择日期" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="印章文件">
-          <el-input v-model="approveForm.sign_stamp" placeholder="印章文件路径" />
-        </el-form-item>
-        <el-form-item label="签发意见">
-          <el-input v-model="approveForm.comment" type="textarea" :rows="3" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="approveVisible = false">取消</el-button>
-        <el-button type="primary" :loading="approving" @click="handleApprove">确认通过</el-button>
+    <ApprovalDialog ref="approvalRef" title="报告签发审批" width="680px" @submit="handleApprovalSubmit">
+      <template #header>
+        <div class="approval-header">
+          <span>委托ID：{{ currentRow?.task_order_id }}</span>
+        </div>
       </template>
-    </el-dialog>
-
-    <!-- Reject dialog -->
-    <el-dialog v-model="rejectVisible" title="报告签发 - 驳回" width="500px">
-      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules" label-width="100px">
-        <el-form-item label="委托ID">{{ rejectForm.task_order_id }}</el-form-item>
-        <el-form-item label="驳回原因" prop="comment">
-          <el-input v-model="rejectForm.comment" type="textarea" :rows="3" placeholder="请填写驳回原因" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="rejectVisible = false">取消</el-button>
-        <el-button type="danger" :loading="rejecting" @click="handleReject">确认驳回</el-button>
+      <template #extraFields>
+        <template v-if="approvalForm.action === 'approve'">
+          <el-alert v-if="sourceReport" type="info" :closable="false" title="承接报告" class="source-report-alert">
+            <div class="source-report-body">
+              <div><b>报告编号：</b>{{ sourceReport.report_no || '（未填写）' }}</div>
+              <div><b>报告标题：</b>{{ sourceReport.report_title || '（未填写）' }}</div>
+              <div><b>报告文件：</b>{{ sourceReport.report_file || '（无）' }}</div>
+              <div v-if="sourceReport.report_content"><b>报告内容：</b>{{ sourceReport.report_content }}</div>
+            </div>
+          </el-alert>
+          <el-alert v-else-if="currentRow?.task_order_id && sourceLoaded" type="warning" :closable="false" title="未找到关联的报告编制记录" class="source-report-alert" />
+          <el-form-item label="编制人意见" v-if="sourceReport">
+            <el-input :model-value="sourceReport.prepare_opinion || '（未填写）'" type="textarea" :rows="2" readonly />
+          </el-form-item>
+          <el-form-item label="原始记录">
+            <div class="raw-records-panel">
+              <el-table :data="rawEntries" size="small" border empty-text="暂无实验原始记录" max-height="180">
+                <el-table-column prop="id" label="ID" width="60" />
+                <el-table-column prop="test_item_id" label="项目ID" width="80" />
+                <el-table-column prop="original_data" label="原始数据" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="created_at" label="录入时间" width="170" />
+              </el-table>
+            </div>
+          </el-form-item>
+          <el-form-item label="报告编号">
+            <el-input v-model="approveExtra.report_no" placeholder="沿用报告编制赋号" />
+          </el-form-item>
+          <el-form-item label="签发结果">
+            <el-select v-model="approveExtra.sign_result" placeholder="选择结果" style="width:100%">
+              <el-option label="通过" value="通过" />
+              <el-option label="驳回" value="驳回" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="签发人">
+            <el-input v-model="approveExtra.signer_name" placeholder="签发人姓名" />
+          </el-form-item>
+          <el-form-item label="签发日期">
+            <el-date-picker v-model="approveExtra.sign_date" type="date" placeholder="选择日期" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="印章文件">
+            <el-input v-model="approveExtra.sign_stamp" placeholder="印章文件路径" />
+          </el-form-item>
+        </template>
       </template>
-    </el-dialog>
+    </ApprovalDialog>
   </div>
 </template>
 
@@ -140,6 +122,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { getReportSignList, getReportSign, createReportSign, updateReportSign, deleteReportSign, approveReportSign, rejectReportSign, getReportPrepareList, getDataEntryList } from '@/api/business'
 import type { ReportSign, ReportPrepare, DataEntry } from '@/api/business'
 
@@ -176,14 +159,15 @@ async function handleSave() {
 }
 async function handleDelete(id: number) { await deleteReportSign(id); ElMessage.success('删除成功'); await loadData() }
 
-const approveVisible = ref(false); const approving = ref(false)
+const approvalRef = ref<InstanceType<typeof ApprovalDialog>>()
+const currentRow = ref<ReportSign | null>(null)
+const approvalForm = reactive({ action: 'approve' as 'approve' | 'reject' })
+const approveExtra = reactive({ report_no: '', sign_result: '通过', signer_name: '', sign_date: '', sign_stamp: '' })
+
 const sourceReport = ref<ReportPrepare | null>(null)
 const sourceLoaded = ref(false)
 const rawEntries = ref<DataEntry[]>([])
-const approveForm = reactive({ id: 0, task_order_id: 0, report_no: '', sign_result: '通过', comment: '', signer_name: '', sign_date: '', sign_stamp: '' })
-function openApprove(row: ReportSign) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.report_no = row.report_no || ''; approveForm.sign_result = '通过'; approveForm.comment = ''; approveForm.signer_name = row.signer_name; approveForm.sign_date = row.sign_date; approveForm.sign_stamp = row.sign_stamp; approveVisible.value = true; loadSourceReport(row.task_order_id) }
 
-// 加载该委托单关联的报告编制记录，供签发时承接查看（流程图 D12 = 报告 + 实验原始记录）
 async function loadSourceReport(taskOrderId: number) {
   sourceReport.value = null
   sourceLoaded.value = false
@@ -193,35 +177,55 @@ async function loadSourceReport(taskOrderId: number) {
     const res = await getReportPrepareList({ task_order_id: String(taskOrderId) })
     const list = (res.data || []) as ReportPrepare[]
     sourceReport.value = list.length ? list[0] : null
-    if (list.length) approveForm.report_no = list[0].report_no || ''
-    // 实验原始记录贯穿展示（数据录入 data_entries 产生）
+    if (list.length) approveExtra.report_no = list[0].report_no || ''
     const dr = await getDataEntryList({ task_order_id: String(taskOrderId) })
     rawEntries.value = (dr.data || []) as DataEntry[]
   } finally {
     sourceLoaded.value = true
   }
 }
-async function handleApprove() {
-  approving.value = true
-  try { await approveReportSign(approveForm.id, { task_id: approveForm.task_order_id, report_no: approveForm.report_no, sign_result: approveForm.sign_result, sign_comment: approveForm.comment, signer_name: approveForm.signer_name, sign_date: approveForm.sign_date, sign_stamp: approveForm.sign_stamp }); ElMessage.success('签发通过，流程已推进'); approveVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { approving.value = false }
+
+function openApprove(row: ReportSign) {
+  currentRow.value = row
+  approveExtra.report_no = row.report_no ?? ''
+  approveExtra.sign_result = '通过'
+  approveExtra.signer_name = row.signer_name ?? ''
+  approveExtra.sign_date = row.sign_date ?? ''
+  approveExtra.sign_stamp = row.sign_stamp ?? ''
+  approvalForm.action = 'approve'
+  approvalRef.value?.open('approve')
+  loadSourceReport(row.task_order_id)
+}
+function openReject(row: ReportSign) {
+  currentRow.value = row
+  approvalForm.action = 'reject'
+  approvalRef.value?.open('reject')
 }
 
-const rejectVisible = ref(false); const rejectFormRef = ref<FormInstance>(); const rejecting = ref(false)
-const rejectForm = reactive({ id: 0, task_order_id: 0, comment: '' })
-const rejectRules: FormRules = { comment: [{ required: true, message: '请填写驳回原因', trigger: 'blur' }] }
-function openReject(row: ReportSign) { rejectForm.id = row.id; rejectForm.task_order_id = row.task_order_id; rejectForm.comment = ''; rejectVisible.value = true }
-async function handleReject() {
-  const valid = await rejectFormRef.value?.validate().catch(() => false); if (!valid) return
-  rejecting.value = true
-  try { await rejectReportSign(rejectForm.id, { task_id: rejectForm.task_order_id, comment: rejectForm.comment }); ElMessage.success('已驳回'); rejectVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { rejecting.value = false }
+async function handleApprovalSubmit(data: { action: string; comment: string }) {
+  if (!currentRow.value) return
+  const id = currentRow.value.id
+  const taskId = currentRow.value.task_order_id
+  if (data.action === 'approve') {
+    await approveReportSign(id, { task_id: taskId, report_no: approveExtra.report_no, sign_result: approveExtra.sign_result, sign_comment: data.comment, signer_name: approveExtra.signer_name, sign_date: approveExtra.sign_date, sign_stamp: approveExtra.sign_stamp })
+    ElMessage.success('签发通过，流程已推进')
+  } else {
+    await rejectReportSign(id, { task_id: taskId, comment: data.comment })
+    ElMessage.success('已驳回')
+  }
+  await loadData()
 }
 </script>
 
 <style scoped>
+.approval-header {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #606266;
+}
 .source-report-alert {
   margin-bottom: 14px;
 }

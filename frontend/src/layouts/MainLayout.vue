@@ -1,7 +1,7 @@
 <template>
   <el-container class="layout-container">
     <el-aside :width="sidebarWidth" class="layout-aside">
-      <Sidebar :collapsed="sidebarCollapsed" />
+      <Sidebar :collapsed="appStore.sidebarCollapsed" />
     </el-aside>
     <el-container>
       <el-header class="layout-header">
@@ -11,7 +11,7 @@
             :size="20"
             @click="toggleSidebar"
           >
-            <Fold v-if="!sidebarCollapsed" />
+            <Fold v-if="!appStore.sidebarCollapsed" />
             <Expand v-else />
           </el-icon>
           <el-breadcrumb separator="/">
@@ -43,26 +43,42 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import { logout } from '@/api/auth'
+import { useUserStore } from '@/stores/user'
+import { useAppStore } from '@/stores/app'
 import Sidebar from './Sidebar.vue'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
+const appStore = useAppStore()
 
-const sidebarCollapsed = ref(false)
-const sidebarWidth = computed(() => (sidebarCollapsed.value ? '64px' : '220px'))
-const username = ref(localStorage.getItem('username') || '')
+const sidebarWidth = computed(() => (appStore.sidebarCollapsed ? '64px' : '220px'))
+const username = computed(() => userStore.username)
 
-const toggleSidebar = () => {
-  sidebarCollapsed.value = !sidebarCollapsed.value
-}
+const toggleSidebar = () => appStore.toggleSidebar()
 
-const handleUserCommand = (cmd: string) => {
+const handleUserCommand = async (cmd: string) => {
   if (cmd === 'logout') {
-    localStorage.removeItem('token')
-    localStorage.removeItem('username')
-    sessionStorage.removeItem('token')
+    try {
+      await ElMessageBox.confirm('确认退出登录？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+    try {
+      await logout()
+    } catch {
+      // ignore backend errors — clear local auth anyway
+    }
+    userStore.clearAuth()
+    ElMessage.success('已退出登录')
     router.push('/login')
   }
 }

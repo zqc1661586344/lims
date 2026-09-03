@@ -32,7 +32,7 @@
           <el-tag v-if="row.next_dept_name" size="small" type="warning">{{ row.next_dept_name }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="create_time" label="到达时间" width="150" />
+      <el-table-column prop="created_at" label="到达时间" width="150" />
       <el-table-column label="紧急程度" width="85">
         <template #default="{ row }">
           <el-tag :type="urgencyType(row.urgency)" size="small">{{ row.urgency || '普通' }}</el-tag>
@@ -54,7 +54,7 @@ interface TaskItem {
   id: number
   title: string
   node_name: string
-  create_time: string
+  created_at: string
   urgency?: string
   [key: string]: unknown
 }
@@ -66,8 +66,8 @@ defineProps({
 })
 
 const emit = defineEmits<{
-  action: [task: TaskItem]
-  'row-click': [task: TaskItem]
+  action: [task: unknown]
+  'row-click': [task: unknown]
 }>()
 
 function urgencyType(urgency?: string): 'danger' | 'warning' | 'info' {
@@ -76,11 +76,11 @@ function urgencyType(urgency?: string): 'danger' | 'warning' | 'info' {
   return 'info'
 }
 
-function handleRowClick(task: TaskItem) {
+function handleRowClick(task: unknown) {
   emit('row-click', task)
 }
 
-function handleAction(task: TaskItem) {
+function handleAction(task: unknown) {
   emit('action', task)
 }
 </script>

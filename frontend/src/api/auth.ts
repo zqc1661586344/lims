@@ -14,6 +14,7 @@ export interface LoginResult {
     dept_id: number
     is_admin: boolean
   }
+  permissions: string[]
 }
 
 export function login(data: LoginParams) {

@@ -38,7 +38,7 @@ interface TimelineNode {
   code: string
   name: string
   time?: string
-  status?: 'pending' | 'completed' | 'rejected'
+  status?: string
   active?: boolean
   operator?: string
   dept?: string

@@ -79,57 +79,41 @@
       </template>
     </el-dialog>
 
-    <!-- Approve dialog -->
-    <el-dialog v-model="approveVisible" title="报告打印发放 - 通过" width="500px">
-      <el-form :model="approveForm" label-width="100px">
-        <el-form-item label="委托ID">{{ approveForm.task_order_id }}</el-form-item>
-        <el-form-item label="打印份数">
-          <el-input-number v-model="approveForm.print_count" :min="1" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="打印结果">
-          <el-select v-model="approveForm.print_result" placeholder="选择结果" style="width:100%">
-            <el-option label="通过" value="通过" />
-            <el-option label="驳回" value="驳回" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="领取方式">
-          <el-select v-model="approveForm.delivery_method" placeholder="选择方式" style="width:100%">
-            <el-option label="自取" value="自取" />
-            <el-option label="邮寄" value="邮寄" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="领取人">
-          <el-input v-model="approveForm.recipient_name" placeholder="领取人姓名" />
-        </el-form-item>
-        <el-form-item label="领取日期">
-          <el-date-picker v-model="approveForm.recipient_date" type="date" placeholder="选择日期" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="快递单号">
-          <el-input v-model="approveForm.tracking_no" placeholder="快递单号" />
-        </el-form-item>
-        <el-form-item label="打印备注">
-          <el-input v-model="approveForm.comment" type="textarea" :rows="3" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="approveVisible = false">取消</el-button>
-        <el-button type="primary" :loading="approving" @click="handleApprove">确认通过</el-button>
+    <ApprovalDialog ref="approvalRef" title="报告打印发放审批" width="500px" @submit="handleApprovalSubmit">
+      <template #header>
+        <div class="approval-header">
+          <span>委托ID：{{ currentRow?.task_order_id }}</span>
+        </div>
       </template>
-    </el-dialog>
-
-    <!-- Reject dialog -->
-    <el-dialog v-model="rejectVisible" title="报告打印发放 - 驳回" width="500px">
-      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules" label-width="100px">
-        <el-form-item label="委托ID">{{ rejectForm.task_order_id }}</el-form-item>
-        <el-form-item label="驳回原因" prop="comment">
-          <el-input v-model="rejectForm.comment" type="textarea" :rows="3" placeholder="请填写驳回原因" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="rejectVisible = false">取消</el-button>
-        <el-button type="danger" :loading="rejecting" @click="handleReject">确认驳回</el-button>
+      <template #extraFields>
+        <template v-if="approvalForm.action === 'approve'">
+          <el-form-item label="打印份数">
+            <el-input-number v-model="approveExtra.print_count" :min="1" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="打印结果">
+            <el-select v-model="approveExtra.print_result" placeholder="选择结果" style="width:100%">
+              <el-option label="通过" value="通过" />
+              <el-option label="驳回" value="驳回" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="领取方式">
+            <el-select v-model="approveExtra.delivery_method" placeholder="选择方式" style="width:100%">
+              <el-option label="自取" value="自取" />
+              <el-option label="邮寄" value="邮寄" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="领取人">
+            <el-input v-model="approveExtra.recipient_name" placeholder="领取人姓名" />
+          </el-form-item>
+          <el-form-item label="领取日期">
+            <el-date-picker v-model="approveExtra.recipient_date" type="date" placeholder="选择日期" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="快递单号">
+            <el-input v-model="approveExtra.tracking_no" placeholder="快递单号" />
+          </el-form-item>
+        </template>
       </template>
-    </el-dialog>
+    </ApprovalDialog>
   </div>
 </template>
 
@@ -137,6 +121,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { getReportPrintList, getReportPrint, createReportPrint, updateReportPrint, deleteReportPrint, approveReportPrint, rejectReportPrint } from '@/api/business'
 import type { ReportPrint } from '@/api/business'
 
@@ -173,25 +158,50 @@ async function handleSave() {
 }
 async function handleDelete(id: number) { await deleteReportPrint(id); ElMessage.success('删除成功'); await loadData() }
 
-const approveVisible = ref(false); const approving = ref(false)
-const approveForm = reactive({ id: 0, task_order_id: 0, print_count: 1, print_result: '通过', delivery_method: '', recipient_name: '', recipient_date: '', tracking_no: '', comment: '' })
-function openApprove(row: ReportPrint) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.print_count = row.print_count || 1; approveForm.print_result = '通过'; approveForm.delivery_method = row.delivery_method; approveForm.recipient_name = row.recipient_name; approveForm.recipient_date = row.recipient_date; approveForm.tracking_no = row.tracking_no; approveForm.comment = ''; approveVisible.value = true }
-async function handleApprove() {
-  approving.value = true
-  try { await approveReportPrint(approveForm.id, { task_id: approveForm.task_order_id, print_count: approveForm.print_count, print_result: approveForm.print_result, delivery_method: approveForm.delivery_method, recipient_name: approveForm.recipient_name, recipient_date: approveForm.recipient_date, tracking_no: approveForm.tracking_no, print_comment: approveForm.comment }); ElMessage.success('打印发放通过，流程已推进'); approveVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { approving.value = false }
+const approvalRef = ref<InstanceType<typeof ApprovalDialog>>()
+const currentRow = ref<ReportPrint | null>(null)
+const approvalForm = reactive({ action: 'approve' as 'approve' | 'reject' })
+const approveExtra = reactive({ print_count: 1, print_result: '通过', delivery_method: '', recipient_name: '', recipient_date: '', tracking_no: '' })
+
+function openApprove(row: ReportPrint) {
+  currentRow.value = row
+  approveExtra.print_count = row.print_count || 1
+  approveExtra.print_result = '通过'
+  approveExtra.delivery_method = row.delivery_method ?? ''
+  approveExtra.recipient_name = row.recipient_name ?? ''
+  approveExtra.recipient_date = row.recipient_date ?? ''
+  approveExtra.tracking_no = row.tracking_no ?? ''
+  approvalForm.action = 'approve'
+  approvalRef.value?.open('approve')
+}
+function openReject(row: ReportPrint) {
+  currentRow.value = row
+  approvalForm.action = 'reject'
+  approvalRef.value?.open('reject')
 }
 
-const rejectVisible = ref(false); const rejectFormRef = ref<FormInstance>(); const rejecting = ref(false)
-const rejectForm = reactive({ id: 0, task_order_id: 0, comment: '' })
-const rejectRules: FormRules = { comment: [{ required: true, message: '请填写驳回原因', trigger: 'blur' }] }
-function openReject(row: ReportPrint) { rejectForm.id = row.id; rejectForm.task_order_id = row.task_order_id; rejectForm.comment = ''; rejectVisible.value = true }
-async function handleReject() {
-  const valid = await rejectFormRef.value?.validate().catch(() => false); if (!valid) return
-  rejecting.value = true
-  try { await rejectReportPrint(rejectForm.id, { task_id: rejectForm.task_order_id, comment: rejectForm.comment }); ElMessage.success('已驳回'); rejectVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { rejecting.value = false }
+async function handleApprovalSubmit(data: { action: string; comment: string }) {
+  if (!currentRow.value) return
+  const id = currentRow.value.id
+  const taskId = currentRow.value.task_order_id
+  if (data.action === 'approve') {
+    await approveReportPrint(id, { task_id: taskId, print_count: approveExtra.print_count, print_result: approveExtra.print_result, delivery_method: approveExtra.delivery_method, recipient_name: approveExtra.recipient_name, recipient_date: approveExtra.recipient_date, tracking_no: approveExtra.tracking_no, print_comment: data.comment })
+    ElMessage.success('打印发放通过，流程已推进')
+  } else {
+    await rejectReportPrint(id, { task_id: taskId, comment: data.comment })
+    ElMessage.success('已驳回')
+  }
+  await loadData()
 }
 </script>
+
+<style scoped>
+.approval-header {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #606266;
+}
+</style>

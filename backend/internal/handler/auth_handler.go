@@ -81,6 +81,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"dept_id":   user.DeptID,
 			"is_admin":  user.IsAdmin,
 		},
+		"permissions": permissions,
 	})
 }
 

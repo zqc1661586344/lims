@@ -45,33 +45,13 @@
       </template>
     </el-dialog>
 
-    <!-- Approve dialog -->
-    <el-dialog v-model="approveVisible" title="任务分配 - 通过" width="500px">
-      <el-form :model="approveForm" label-width="100px">
-        <el-form-item label="委托ID">{{ approveForm.task_order_id }}</el-form-item>
-        <el-form-item label="审批意见">
-          <el-input v-model="approveForm.comment" type="textarea" :rows="3" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="approveVisible = false">取消</el-button>
-        <el-button type="primary" :loading="approving" @click="handleApprove">确认通过</el-button>
+    <ApprovalDialog ref="approvalRef" title="任务分配审批" @submit="handleApprovalSubmit">
+      <template #header>
+        <div class="approval-header">
+          <span>委托ID：{{ currentRow?.task_order_id }}</span>
+        </div>
       </template>
-    </el-dialog>
-
-    <!-- Reject dialog -->
-    <el-dialog v-model="rejectVisible" title="任务分配 - 驳回" width="500px">
-      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules" label-width="100px">
-        <el-form-item label="委托ID">{{ rejectForm.task_order_id }}</el-form-item>
-        <el-form-item label="驳回原因" prop="comment">
-          <el-input v-model="rejectForm.comment" type="textarea" :rows="3" placeholder="请填写驳回原因" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="rejectVisible = false">取消</el-button>
-        <el-button type="danger" :loading="rejecting" @click="handleReject">确认驳回</el-button>
-      </template>
-    </el-dialog>
+    </ApprovalDialog>
   </div>
 </template>
 
@@ -79,6 +59,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { getTaskAssignList, getTaskAssign, createTaskAssign, updateTaskAssign, deleteTaskAssign, approveTaskAssign, rejectTaskAssign } from '@/api/business'
 import type { TaskAssign } from '@/api/business'
 
@@ -115,25 +96,34 @@ async function handleSave() {
 }
 async function handleDelete(id: number) { await deleteTaskAssign(id); ElMessage.success('删除成功'); await loadData() }
 
-const approveVisible = ref(false); const approving = ref(false)
-const approveForm = reactive({ id: 0, task_order_id: 0, comment: '' })
-function openApprove(row: TaskAssign) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.comment = ''; approveVisible.value = true }
-async function handleApprove() {
-  approving.value = true
-  try { await approveTaskAssign(approveForm.id, { task_id: approveForm.task_order_id, comment: approveForm.comment }); ElMessage.success('分配通过，流程已推进'); approveVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { approving.value = false }
-}
+const approvalRef = ref<InstanceType<typeof ApprovalDialog>>()
+const currentRow = ref<TaskAssign | null>(null)
 
-const rejectVisible = ref(false); const rejectFormRef = ref<FormInstance>(); const rejecting = ref(false)
-const rejectForm = reactive({ id: 0, task_order_id: 0, comment: '' })
-const rejectRules: FormRules = { comment: [{ required: true, message: '请填写驳回原因', trigger: 'blur' }] }
-function openReject(row: TaskAssign) { rejectForm.id = row.id; rejectForm.task_order_id = row.task_order_id; rejectForm.comment = ''; rejectVisible.value = true }
-async function handleReject() {
-  const valid = await rejectFormRef.value?.validate().catch(() => false); if (!valid) return
-  rejecting.value = true
-  try { await rejectTaskAssign(rejectForm.id, { task_id: rejectForm.task_order_id, comment: rejectForm.comment }); ElMessage.success('已驳回'); rejectVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { rejecting.value = false }
+function openApprove(row: TaskAssign) { currentRow.value = row; approvalRef.value?.open('approve') }
+function openReject(row: TaskAssign) { currentRow.value = row; approvalRef.value?.open('reject') }
+
+async function handleApprovalSubmit(data: { action: string; comment: string }) {
+  if (!currentRow.value) return
+  const id = currentRow.value.id
+  const taskId = currentRow.value.task_order_id
+  if (data.action === 'approve') {
+    await approveTaskAssign(id, { task_id: taskId, comment: data.comment })
+    ElMessage.success('分配通过，流程已推进')
+  } else {
+    await rejectTaskAssign(id, { task_id: taskId, comment: data.comment })
+    ElMessage.success('已驳回')
+  }
+  await loadData()
 }
 </script>
+
+<style scoped>
+.approval-header {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #606266;
+}
+</style>

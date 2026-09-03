@@ -33,9 +33,15 @@ import { ElMessage } from 'element-plus'
 import TaskList from '@/components/TaskList.vue'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import ProcessTimeline from '@/components/ProcessTimeline.vue'
-import { getPendingTasksByDept, getPendingTasksByUser, getProcessHistory, getNodeDefinitions } from '@/api/business'
-import type { PendingTask, TimelineNode, NodeDefinition } from '@/api/business'
-import { approveTask, rejectTask } from '@/api/workflow'
+import {
+  getPendingTasksByDept,
+  getPendingTasksByUser,
+  getProcessHistory,
+  getNodeDefinitions,
+  approveTask,
+  rejectTask,
+} from '@/api/workflow'
+import type { PendingTask, TimelineNode, NodeDefinition } from '@/api/workflow'
 import { isAdmin } from '@/utils/permission'
 
 const deptLoading = ref(false)
@@ -75,16 +81,18 @@ async function loadTasks() {
   finally { myLoading.value = false }
 }
 
-function openApproval(task: PendingTask) {
-  currentTaskId = task.id
+function openApproval(task: unknown) {
+  const t = task as PendingTask
+  currentTaskId = t.id
   approvalDialogRef.value?.open()
 }
 
-async function showDetail(task: PendingTask) {
-  if (!task.process_instance_id) return
-  selectedInstanceId.value = task.process_instance_id
+async function showDetail(task: unknown) {
+  const t = task as PendingTask
+  if (!t.process_instance_id) return
+  selectedInstanceId.value = t.process_instance_id
   try {
-    const res = await getProcessHistory(task.process_instance_id)
+    const res = await getProcessHistory(t.process_instance_id)
     timelineNodes.value = res.data as TimelineNode[]
   } catch {
     timelineNodes.value = []

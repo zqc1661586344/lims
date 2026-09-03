@@ -56,42 +56,26 @@
       </template>
     </el-dialog>
 
-    <!-- Approve dialog -->
-    <el-dialog v-model="approveVisible" title="数据复核 - 通过" width="500px">
-      <el-form :model="approveForm" label-width="100px">
-        <el-form-item label="委托ID">{{ approveForm.task_order_id }}</el-form-item>
-        <el-form-item label="复核结果">
-          <el-select v-model="approveForm.review_result" placeholder="选择结果" style="width:100%">
-            <el-option label="通过" value="通过" />
-            <el-option label="驳回" value="驳回" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="复核意见">
-          <el-input v-model="approveForm.comment" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item label="问题记录">
-          <el-input v-model="approveForm.issues_found" type="textarea" :rows="3" placeholder="JSON: [{issue, severity}]" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="approveVisible = false">取消</el-button>
-        <el-button type="primary" :loading="approving" @click="handleApprove">确认通过</el-button>
+    <ApprovalDialog ref="approvalRef" title="数据复核审批" width="500px" @submit="handleApprovalSubmit">
+      <template #header>
+        <div class="approval-header">
+          <span>委托ID：{{ currentRow?.task_order_id }}</span>
+        </div>
       </template>
-    </el-dialog>
-
-    <!-- Reject dialog -->
-    <el-dialog v-model="rejectVisible" title="数据复核 - 驳回" width="500px">
-      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules" label-width="100px">
-        <el-form-item label="委托ID">{{ rejectForm.task_order_id }}</el-form-item>
-        <el-form-item label="驳回原因" prop="comment">
-          <el-input v-model="rejectForm.comment" type="textarea" :rows="3" placeholder="请填写驳回原因" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="rejectVisible = false">取消</el-button>
-        <el-button type="danger" :loading="rejecting" @click="handleReject">确认驳回</el-button>
+      <template #extraFields>
+        <template v-if="approvalForm.action === 'approve'">
+          <el-form-item label="复核结果">
+            <el-select v-model="approveExtra.review_result" placeholder="选择结果" style="width:100%">
+              <el-option label="通过" value="通过" />
+              <el-option label="驳回" value="驳回" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="问题记录">
+            <el-input v-model="approveExtra.issues_found" type="textarea" :rows="3" placeholder="JSON: [{issue, severity}]" />
+          </el-form-item>
+        </template>
       </template>
-    </el-dialog>
+    </ApprovalDialog>
   </div>
 </template>
 
@@ -99,6 +83,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { getDataReviewList, getDataReview, createDataReview, updateDataReview, deleteDataReview, approveDataReview, rejectDataReview } from '@/api/business'
 import type { DataReview } from '@/api/business'
 
@@ -135,25 +120,45 @@ async function handleSave() {
 }
 async function handleDelete(id: number) { await deleteDataReview(id); ElMessage.success('删除成功'); await loadData() }
 
-const approveVisible = ref(false); const approving = ref(false)
-const approveForm = reactive({ id: 0, task_order_id: 0, review_result: '通过', comment: '', issues_found: '' })
-function openApprove(row: DataReview) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.review_result = '通过'; approveForm.comment = ''; approveForm.issues_found = ''; approveVisible.value = true }
-async function handleApprove() {
-  approving.value = true
-  try { await approveDataReview(approveForm.id, { task_id: approveForm.task_order_id, review_result: approveForm.review_result, review_comment: approveForm.comment, issues_found: approveForm.issues_found }); ElMessage.success('复核通过，流程已推进'); approveVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { approving.value = false }
+const approvalRef = ref<InstanceType<typeof ApprovalDialog>>()
+const currentRow = ref<DataReview | null>(null)
+const approvalForm = reactive({ action: 'approve' as 'approve' | 'reject' })
+const approveExtra = reactive({ review_result: '通过', issues_found: '' })
+
+function openApprove(row: DataReview) {
+  currentRow.value = row
+  approveExtra.review_result = '通过'; approveExtra.issues_found = ''
+  approvalForm.action = 'approve'
+  approvalRef.value?.open('approve')
+}
+function openReject(row: DataReview) {
+  currentRow.value = row
+  approvalForm.action = 'reject'
+  approvalRef.value?.open('reject')
 }
 
-const rejectVisible = ref(false); const rejectFormRef = ref<FormInstance>(); const rejecting = ref(false)
-const rejectForm = reactive({ id: 0, task_order_id: 0, comment: '' })
-const rejectRules: FormRules = { comment: [{ required: true, message: '请填写驳回原因', trigger: 'blur' }] }
-function openReject(row: DataReview) { rejectForm.id = row.id; rejectForm.task_order_id = row.task_order_id; rejectForm.comment = ''; rejectVisible.value = true }
-async function handleReject() {
-  const valid = await rejectFormRef.value?.validate().catch(() => false); if (!valid) return
-  rejecting.value = true
-  try { await rejectDataReview(rejectForm.id, { task_id: rejectForm.task_order_id, comment: rejectForm.comment }); ElMessage.success('已驳回'); rejectVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { rejecting.value = false }
+async function handleApprovalSubmit(data: { action: string; comment: string }) {
+  if (!currentRow.value) return
+  const id = currentRow.value.id
+  const taskId = currentRow.value.task_order_id
+  if (data.action === 'approve') {
+    await approveDataReview(id, { task_id: taskId, review_result: approveExtra.review_result, review_comment: data.comment, issues_found: approveExtra.issues_found })
+    ElMessage.success('复核通过，流程已推进')
+  } else {
+    await rejectDataReview(id, { task_id: taskId, comment: data.comment })
+    ElMessage.success('已驳回')
+  }
+  await loadData()
 }
 </script>
+
+<style scoped>
+.approval-header {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #606266;
+}
+</style>

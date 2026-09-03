@@ -46,8 +46,10 @@ import { useRouter } from 'vue-router'
 import { User, Lock } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { login } from '@/api/auth'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
 const formRef = ref<FormInstance>()
 
 const form = reactive({
@@ -72,9 +74,12 @@ const handleLogin = async () => {
       username: form.username,
       password: form.password,
     })
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('username', res.data.user.real_name || res.data.user.username)
-    localStorage.setItem('is_admin', String(res.data.user.is_admin))
+    userStore.setAuth({
+      token: res.data.token,
+      username: res.data.user.real_name || res.data.user.username,
+      is_admin: res.data.user.is_admin,
+      permissions: res.data.permissions || [],
+    })
     router.push('/dashboard')
   } catch {
     // Error handled by axios interceptor

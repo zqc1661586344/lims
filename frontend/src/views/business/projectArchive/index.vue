@@ -65,50 +65,34 @@
       </template>
     </el-dialog>
 
-    <!-- Approve dialog -->
-    <el-dialog v-model="approveVisible" title="项目归档 - 通过" width="500px">
-      <el-form :model="approveForm" label-width="100px">
-        <el-form-item label="委托ID">{{ approveForm.task_order_id }}</el-form-item>
-        <el-form-item label="归档编号">
-          <el-input v-model="approveForm.archive_no" placeholder="归档编号" />
-        </el-form-item>
-        <el-form-item label="归档位置">
-          <el-input v-model="approveForm.archive_location" placeholder="归档位置" />
-        </el-form-item>
-        <el-form-item label="归档日期">
-          <el-date-picker v-model="approveForm.archive_date" type="date" placeholder="选择日期" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="保存期限(月)">
-          <el-input-number v-model="approveForm.retention_period" :min="1" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="归档文件">
-          <el-alert type="info" :closable="false" class="record-preview-alert" title="归档文件清单将自动汇聚本委托全部环节文档（D1–D13）">
-            提交确认后将由系统自动生成，无需手动填写。
-          </el-alert>
-        </el-form-item>
-        <el-form-item label="归档备注">
-          <el-input v-model="approveForm.comment" type="textarea" :rows="3" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="approveVisible = false">取消</el-button>
-        <el-button type="primary" :loading="approving" @click="handleApprove">确认归档</el-button>
+    <ApprovalDialog ref="approvalRef" title="项目归档审批" width="500px" @submit="handleApprovalSubmit">
+      <template #header>
+        <div class="approval-header">
+          <span>委托ID：{{ currentRow?.task_order_id }}</span>
+        </div>
       </template>
-    </el-dialog>
-
-    <!-- Reject dialog -->
-    <el-dialog v-model="rejectVisible" title="项目归档 - 驳回" width="500px">
-      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules" label-width="100px">
-        <el-form-item label="委托ID">{{ rejectForm.task_order_id }}</el-form-item>
-        <el-form-item label="驳回原因" prop="comment">
-          <el-input v-model="rejectForm.comment" type="textarea" :rows="3" placeholder="请填写驳回原因" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="rejectVisible = false">取消</el-button>
-        <el-button type="danger" :loading="rejecting" @click="handleReject">确认驳回</el-button>
+      <template #extraFields>
+        <template v-if="approvalForm.action === 'approve'">
+          <el-form-item label="归档编号">
+            <el-input v-model="approveExtra.archive_no" placeholder="归档编号" />
+          </el-form-item>
+          <el-form-item label="归档位置">
+            <el-input v-model="approveExtra.archive_location" placeholder="归档位置" />
+          </el-form-item>
+          <el-form-item label="归档日期">
+            <el-date-picker v-model="approveExtra.archive_date" type="date" placeholder="选择日期" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="保存期限(月)">
+            <el-input-number v-model="approveExtra.retention_period" :min="1" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="归档文件">
+            <el-alert type="info" :closable="false" class="record-preview-alert" title="归档文件清单将自动汇聚本委托全部环节文档（D1–D13）">
+              提交确认后将由系统自动生成，无需手动填写。
+            </el-alert>
+          </el-form-item>
+        </template>
       </template>
-    </el-dialog>
+    </ApprovalDialog>
   </div>
 </template>
 
@@ -116,6 +100,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import { getProjectArchiveList, getProjectArchive, createProjectArchive, updateProjectArchive, deleteProjectArchive, approveProjectArchive, rejectProjectArchive } from '@/api/business'
 import type { ProjectArchive } from '@/api/business'
 
@@ -123,7 +108,6 @@ const loading = ref(false)
 const items = ref<ProjectArchive[]>([])
 const taskOrderIdFilter = ref('')
 
-// 将归档文件清单（JSON 数组字符串 [{stage, doc_name, ref}]）格式化为可读文本
 function formatArchiveFiles(files: string) {
   if (!files) return '未生成'
   try {
@@ -164,30 +148,50 @@ async function handleSave() {
 }
 async function handleDelete(id: number) { await deleteProjectArchive(id); ElMessage.success('删除成功'); await loadData() }
 
-const approveVisible = ref(false); const approving = ref(false)
-const approveForm = reactive({ id: 0, task_order_id: 0, archive_no: '', archive_location: '', archive_date: '', archive_files: '', comment: '', retention_period: 36 })
-function openApprove(row: ProjectArchive) { approveForm.id = row.id; approveForm.task_order_id = row.task_order_id; approveForm.archive_no = row.archive_no; approveForm.archive_location = row.archive_location; approveForm.archive_date = row.archive_date; approveForm.archive_files = row.archive_files; approveForm.retention_period = row.retention_period || 36; approveForm.comment = ''; approveVisible.value = true }
-async function handleApprove() {
-  approving.value = true
-  try { await approveProjectArchive(approveForm.id, { task_id: approveForm.task_order_id, archive_no: approveForm.archive_no, archive_location: approveForm.archive_location, archive_date: approveForm.archive_date, archive_files: '', archive_comment: approveForm.comment, retention_period: approveForm.retention_period }); ElMessage.success('项目归档完成，流程已结束'); approveVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { approving.value = false }
+const approvalRef = ref<InstanceType<typeof ApprovalDialog>>()
+const currentRow = ref<ProjectArchive | null>(null)
+const approvalForm = reactive({ action: 'approve' as 'approve' | 'reject' })
+const approveExtra = reactive({ archive_no: '', archive_location: '', archive_date: '', retention_period: 36 })
+
+function openApprove(row: ProjectArchive) {
+  currentRow.value = row
+  approveExtra.archive_no = row.archive_no ?? ''
+  approveExtra.archive_location = row.archive_location ?? ''
+  approveExtra.archive_date = row.archive_date ?? ''
+  approveExtra.retention_period = row.retention_period || 36
+  approvalForm.action = 'approve'
+  approvalRef.value?.open('approve')
+}
+function openReject(row: ProjectArchive) {
+  currentRow.value = row
+  approvalForm.action = 'reject'
+  approvalRef.value?.open('reject')
 }
 
-const rejectVisible = ref(false); const rejectFormRef = ref<FormInstance>(); const rejecting = ref(false)
-const rejectForm = reactive({ id: 0, task_order_id: 0, comment: '' })
-const rejectRules: FormRules = { comment: [{ required: true, message: '请填写驳回原因', trigger: 'blur' }] }
-function openReject(row: ProjectArchive) { rejectForm.id = row.id; rejectForm.task_order_id = row.task_order_id; rejectForm.comment = ''; rejectVisible.value = true }
-async function handleReject() {
-  const valid = await rejectFormRef.value?.validate().catch(() => false); if (!valid) return
-  rejecting.value = true
-  try { await rejectProjectArchive(rejectForm.id, { task_id: rejectForm.task_order_id, comment: rejectForm.comment }); ElMessage.success('已驳回'); rejectVisible.value = false; await loadData() }
-  catch (e: any) { ElMessage.error(e?.response?.data?.message || '操作失败') }
-  finally { rejecting.value = false }
+async function handleApprovalSubmit(data: { action: string; comment: string }) {
+  if (!currentRow.value) return
+  const id = currentRow.value.id
+  const taskId = currentRow.value.task_order_id
+  if (data.action === 'approve') {
+    await approveProjectArchive(id, { task_id: taskId, archive_no: approveExtra.archive_no, archive_location: approveExtra.archive_location, archive_date: approveExtra.archive_date, archive_files: '', archive_comment: data.comment, retention_period: approveExtra.retention_period })
+    ElMessage.success('项目归档完成，流程已结束')
+  } else {
+    await rejectProjectArchive(id, { task_id: taskId, comment: data.comment })
+    ElMessage.success('已驳回')
+  }
+  await loadData()
 }
 </script>
 
 <style scoped>
+.approval-header {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #606266;
+}
 .record-preview-alert {
   width: 100%;
   margin-bottom: 0;

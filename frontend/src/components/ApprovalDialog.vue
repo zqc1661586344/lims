@@ -1,6 +1,8 @@
 <template>
-  <el-dialog v-model="visible" title="审批操作" width="450px">
+  <el-dialog v-model="visible" :title="title" :width="width">
+    <slot name="header" />
     <el-form ref="formRef" :model="form" :rules="formRules" label-width="80px">
+      <slot name="extraFields" />
       <el-form-item label="审批结果">
         <el-radio-group v-model="form.action">
           <el-radio value="approve">通过</el-radio>
@@ -15,12 +17,12 @@
           :placeholder="form.action === 'approve' ? '审批通过（可选填意见）' : '请填写驳回原因'"
         />
       </el-form-item>
-      <el-form-item v-if="form.action === 'reject'" label="驳回节点">
+      <el-form-item v-if="form.action === 'reject' && rejectTargets.length" label="驳回节点">
         <el-select v-model="form.reject_target" placeholder="选择驳回目标节点" style="width:100%">
           <el-option v-for="node in rejectTargets" :key="node.code" :label="node.name" :value="node.code" />
         </el-select>
       </el-form-item>
-      <el-form-item label="附件">
+      <el-form-item v-if="showUpload" label="附件">
         <el-upload
           :auto-upload="false"
           :limit="3"
@@ -39,7 +41,6 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 
 interface RejectTarget {
@@ -48,9 +49,17 @@ interface RejectTarget {
 }
 
 const props = withDefaults(defineProps<{
+  title?: string
+  width?: string
   rejectTargets?: RejectTarget[]
+  showUpload?: boolean
+  requireCommentOnApprove?: boolean
 }>(), {
+  title: '审批操作',
+  width: '450px',
   rejectTargets: () => [],
+  showUpload: false,
+  requireCommentOnApprove: false,
 })
 
 const emit = defineEmits<{
@@ -63,17 +72,19 @@ const formRef = ref<FormInstance>()
 const files = ref<File[]>([])
 
 const form = reactive({
-  action: 'approve',
+  action: 'approve' as 'approve' | 'reject',
   comment: '',
   reject_target: '',
 })
 
-const formRules: FormRules = {
+const formRules = (): FormRules => ({
   comment: [
     {
       validator: (_: unknown, value: string, callback: (e?: Error) => void) => {
         if (form.action === 'reject' && !value) {
           callback(new Error('驳回必须填写原因'))
+        } else if (props.requireCommentOnApprove && form.action === 'approve' && !value) {
+          callback(new Error('请填写审批意见'))
         } else {
           callback()
         }
@@ -81,10 +92,10 @@ const formRules: FormRules = {
       trigger: 'blur',
     },
   ],
-}
+})
 
-function open() {
-  form.action = 'approve'
+function open(action?: 'approve' | 'reject') {
+  form.action = action ?? 'approve'
   form.comment = ''
   form.reject_target = ''
   files.value = []

@@ -4,12 +4,36 @@ export interface PendingTask {
   id: number
   node_code: string
   node_name: string
+  next_node?: string
+  next_node_name?: string
+  next_dept_name?: string
   title: string
   business_type: string
   business_id: number
   process_instance_id: number
   assignee_dept_id: number
+  dept_name?: string
   created_at: string
+}
+
+export interface TimelineNode {
+  code: string
+  name: string
+  time: string
+  status: string
+  active: boolean
+  operator: string
+  dept: string
+  comment: string
+}
+
+export interface NodeDefinition {
+  code: string
+  name: string
+  dept_code: string
+  can_reject: boolean
+  reject_target: string
+  next_node: string
 }
 
 export function getPendingTasksByDept() {
