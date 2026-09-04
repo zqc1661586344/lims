@@ -9,16 +9,13 @@ const props = withDefaults(defineProps<{
   mode?: 'edit' | 'readonly'
   sheetData?: any
   height?: string
-  title?: string
 }>(), {
   mode: 'edit',
   height: '500px',
-  title: '',
 })
 
 const emit = defineEmits<{
   (e: 'ready', api: FUniver): void
-  (e: 'update:sheetData', snapshot: any): void
 }>()
 
 const containerRef = ref<HTMLElement>()
@@ -27,16 +24,14 @@ const apiRef = shallowRef<FUniver | null>(null)
 let fWorkbook: any = null
 let initialized = false
 
-function buildDefaultWorkbookData(existingData?: any) {
-  if (existingData && typeof existingData === 'object' && Object.keys(existingData).length > 0) {
-    if (existingData.sheets && Object.keys(existingData.sheets).length > 0) {
-      return existingData
-    }
+function buildWorkbookData(existingData?: any) {
+  if (existingData && typeof existingData === 'object' && Object.keys(existingData).length > 0 && existingData.sheets) {
+    return existingData
   }
   const sheetId = `sheet-${Date.now()}`
   return {
     id: `workbook-${Date.now()}`,
-    name: props.title || 'Sheet',
+    name: 'Sheet',
     sheetOrder: [sheetId],
     sheets: {
       [sheetId]: {
@@ -51,39 +46,32 @@ function buildDefaultWorkbookData(existingData?: any) {
     },
     locale: LocaleType.ZH_CN,
     creator: 'LIMS',
-    createTime: new Date().toISOString(),
   }
 }
 
 async function init() {
   if (initialized) return
   if (!containerRef.value) {
-    console.warn('[LabSheetEditor] init: containerRef null, deferring')
     await nextTick()
     if (!containerRef.value) return
   }
 
   const el = containerRef.value!
-
   for (let i = 0; i < 20 && (el.clientHeight < 30 || el.clientWidth < 30); i++) {
     await new Promise(r => setTimeout(r, 100))
   }
-
-  if (el.clientHeight < 30 || el.clientWidth < 30) {
+  if (el.clientHeight < 30) {
     console.error('[LabSheetEditor] container too small:', el.clientWidth, 'x', el.clientHeight)
     return
   }
 
   initialized = true
-
   try {
     const preset = UniverSheetsCorePreset({ container: el })
-
     const univer = new Univer({
       locale: LocaleType.ZH_CN,
       locales: { [LocaleType.ZH_CN]: zhCN },
     })
-
     preset.plugins.forEach((p: any) => {
       if (Array.isArray(p)) {
         const [Cls, cfg] = p
@@ -94,19 +82,16 @@ async function init() {
     })
 
     univerRef.value = univer
-
     const api = FUniver.newAPI(univer)
     apiRef.value = api
 
-    const wbData = buildDefaultWorkbookData(props.sheetData)
-    fWorkbook = api.createWorkbook(wbData)
-
+    fWorkbook = api.createWorkbook(buildWorkbookData(props.sheetData))
     if (props.mode === 'readonly') {
       try { fWorkbook?.setEditable?.(false) } catch {}
     }
 
     emit('ready', api)
-    console.log('[LabSheetEditor] initialized OK:', fWorkbook?.getId?.(), 'mode:', props.mode)
+    console.log('[LabSheetEditor] initialized, wb=', fWorkbook?.getId?.(), 'mode=', props.mode)
   } catch (e) {
     console.error('[LabSheetEditor] init FAILED:', e)
     initialized = false
@@ -126,8 +111,12 @@ function destroy() {
   apiRef.value = null
 }
 
-onBeforeUnmount(() => { destroy() })
+function getSnapshot() {
+  try { return fWorkbook?.save?.() || fWorkbook?.getSnapshot?.() } catch { return null }
+}
+
 onMounted(() => { init() })
+onBeforeUnmount(() => { destroy() })
 
 watch(() => props.mode, (mode) => {
   if (fWorkbook) {
@@ -135,53 +124,29 @@ watch(() => props.mode, (mode) => {
   }
 })
 
-function getSnapshot() {
-  try { return fWorkbook?.save?.() || fWorkbook?.getSnapshot?.() } catch { return null }
-}
+watch(() => props.sheetData, () => {
+  if (initialized && fWorkbook && apiRef.value) {
+    try {
+      apiRef.value.disposeUnit(fWorkbook.getId())
+    } catch {}
+    fWorkbook = apiRef.value.createWorkbook(buildWorkbookData(props.sheetData))
+    if (props.mode === 'readonly') {
+      try { fWorkbook?.setEditable?.(false) } catch {}
+    }
+  }
+})
 
 defineExpose({ init, destroy, getSnapshot })
 </script>
 
 <template>
-  <div class="lab-sheet-editor">
-    <div v-if="title" class="lab-sheet-title">{{ title }}</div>
-    <div ref="containerRef" class="lab-sheet-container" :style="{ height }"></div>
-  </div>
+  <div ref="containerRef" class="lab-sheet-container" :style="{ height }"></div>
 </template>
 
 <style scoped>
-.lab-sheet-editor {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-}
-.lab-sheet-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-  padding: 8px 12px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #ebeef5;
-  border-radius: 4px 4px 0 0;
-  flex-shrink: 0;
-}
 .lab-sheet-container {
   width: 100%;
   position: relative;
   min-height: 300px;
-  border: 1px solid #ebeef5;
-  border-top: none;
-  border-radius: 0 0 4px 4px;
-  overflow: hidden;
-}
-.lab-sheet-container :deep(> *) {
-  width: 100% !important;
-  height: 100% !important;
-}
-</style>
-
-<style>
-.lab-sheet-container canvas {
-  display: block !important;
 }
 </style>
