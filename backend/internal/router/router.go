@@ -62,6 +62,8 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 		routes.RegisterWorkflowRoutes(api, cfg, logger, db)
 		// Register business routes (Phase 6)
 		routes.RegisterBusinessRoutes(api, cfg, logger, db)
+		// Register lab sheet routes (Univer Sheet 检验单)
+		routes.RegisterLabSheetRoutes(api, cfg, logger, db)
 	}
 
 	return r
@@ -99,5 +101,7 @@ func autoMigrate(logger *zap.Logger, db *gorm.DB) {
 		&model.ReportSign{},
 		&model.ReportPrint{},
 		&model.ProjectArchive{},
+		&model.LabSheetTemplate{},
+		&model.LabSheet{},
 	)
 }

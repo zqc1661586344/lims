@@ -170,6 +170,8 @@ async function handleSave() {
       sample_type: form.sample_type,
       test_items: JSON.stringify(form.test_items),
     }
+    console.log('[taskOrder handleSave] form.test_items =', form.test_items)
+    console.log('[taskOrder handleSave] data.test_items =', data.test_items)
     if (isEdit.value) {
       await updateTaskOrder(form.id, data)
       ElMessage.success('更新成功')

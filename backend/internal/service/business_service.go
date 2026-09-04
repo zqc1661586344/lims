@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"lims-backend/internal/model"
 	"lims-backend/internal/workflow"
@@ -256,14 +257,48 @@ func (s *BusinessService) ensureBusinessRecord(tx *gorm.DB, nodeCode string, ord
 			TestItemList: "{}",
 		}).Error
 	case workflow.NodeDataEntry:
-		var count int64
-		if err := tx.Model(&model.DataEntry{}).Where("task_order_id = ?", orderID).Count(&count).Error; err != nil {
+		var order model.TaskOrder
+		if err := tx.Select("id, test_items").First(&order, orderID).Error; err != nil {
 			return err
 		}
-		if count > 0 {
+
+		testItemIDs, err := parseTestItemIDs(order.TestItems)
+		if err != nil {
+			s.logger.Warn("NodeDataEntry: parse test_items failed", zap.Uint("order_id", orderID), zap.Error(err))
+		}
+
+		if len(testItemIDs) == 0 {
+			s.logger.Warn("NodeDataEntry: no test items defined on task order, skipping data entry creation",
+				zap.Uint("order_id", orderID))
+			if err := tx.Where("task_order_id = ? AND test_item_id = 0", orderID).Delete(&model.DataEntry{}).Error; err != nil {
+				s.logger.Warn("NodeDataEntry: clean up old test_item_id=0 entries failed", zap.Error(err))
+			}
 			return nil
 		}
-		return tx.Create(&model.DataEntry{TaskOrderID: orderID, OriginalData: "{}"}).Error
+
+		if err := tx.Where("task_order_id = ? AND test_item_id = 0", orderID).Delete(&model.DataEntry{}).Error; err != nil {
+			s.logger.Warn("NodeDataEntry: clean up old test_item_id=0 entries failed", zap.Error(err))
+		}
+
+		for _, tid := range testItemIDs {
+			var count int64
+			if err := tx.Model(&model.DataEntry{}).
+				Where("task_order_id = ? AND test_item_id = ?", orderID, tid).
+				Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				continue
+			}
+			if err := tx.Create(&model.DataEntry{
+				TaskOrderID:  orderID,
+				TestItemID:   tid,
+				OriginalData: "{}",
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return s.ensureLabSheetsForOrder(tx, orderID, testItemIDs)
 	case workflow.NodeDataReview:
 		var m model.DataReview
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.DataReview{
@@ -311,6 +346,96 @@ func (s *BusinessService) ensureBusinessRecord(tx *gorm.DB, nodeCode string, ord
 			TaskOrderID:  orderID,
 			ArchiveFiles: "{}",
 		}).Error
+	}
+	return nil
+}
+
+// parseTestItemIDs decodes TaskOrder.TestItems which is stored as a JSON array of
+// JSON-encoded strings (frontend uses JSON.stringify per item). Example stored value:
+//
+//	["{\"test_item_id\":1,\"name\":\"pH\"}", "{\"test_item_id\":2,\"name\":\"COD\"}"]
+func parseTestItemIDs(raw string) ([]uint, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	fmt.Printf("[DEBUG parseTestItemIDs] raw = %s\n", raw)
+	var outer []string
+	if err := json.Unmarshal([]byte(raw), &outer); err != nil {
+		fmt.Printf("[DEBUG parseTestItemIDs] outer unmarshal failed: %v\n", err)
+		var outer2 []map[string]interface{}
+		if err2 := json.Unmarshal([]byte(raw), &outer2); err2 == nil {
+			fmt.Printf("[DEBUG parseTestItemIDs] fallback outer2 len=%d\n", len(outer2))
+			for _, m := range outer2 {
+				if v, ok := m["test_item_id"].(float64); ok && uint(v) > 0 {
+					fmt.Printf("[DEBUG parseTestItemIDs] direct item id=%d\n", uint(v))
+				}
+			}
+		}
+		return nil, fmt.Errorf("outer: %w", err)
+	}
+	fmt.Printf("[DEBUG parseTestItemIDs] outer len=%d\n", len(outer))
+	seen := make(map[uint]struct{})
+	var ids []uint
+	for i, s := range outer {
+		fmt.Printf("[DEBUG parseTestItemIDs] item[%d] = %s\n", i, s)
+		var obj struct {
+			TestItemID uint `json:"test_item_id"`
+		}
+		if err := json.Unmarshal([]byte(s), &obj); err != nil {
+			fmt.Printf("[DEBUG parseTestItemIDs] inner unmarshal failed: %v\n", err)
+			continue
+		}
+		fmt.Printf("[DEBUG parseTestItemIDs] item[%d] parsed id=%d\n", i, obj.TestItemID)
+		if obj.TestItemID > 0 {
+			if _, dup := seen[obj.TestItemID]; !dup {
+				seen[obj.TestItemID] = struct{}{}
+				ids = append(ids, obj.TestItemID)
+			}
+		}
+	}
+	fmt.Printf("[DEBUG parseTestItemIDs] final ids = %v\n", ids)
+	return ids, nil
+}
+
+// ensureLabSheetsForOrder creates LabSheet instances for every test item declared on
+// the TaskOrder, using the latest template (if any) as the starting structure.
+// Called automatically when the workflow advances to node_data_entry.
+func (s *BusinessService) ensureLabSheetsForOrder(tx *gorm.DB, orderID uint, testItemIDs []uint) error {
+	for _, it := range testItemIDs {
+		if it == 0 {
+			continue
+		}
+		var existing int64
+		if err := tx.Model(&model.LabSheet{}).
+			Where("task_order_id = ? AND test_item_id = ? AND node_code = ?", orderID, it, workflow.NodeDataEntry).
+			Count(&existing).Error; err != nil {
+			return err
+		}
+		if existing > 0 {
+			continue
+		}
+
+		var tpl model.LabSheetTemplate
+		var templateID *uint
+		var sheetData json.RawMessage = []byte("{}")
+		if err := tx.Where("test_item_id = ? AND status = 1", it).
+			Order("version DESC").First(&tpl).Error; err == nil {
+			templateID = &tpl.ID
+			if len(tpl.Structure) > 0 {
+				sheetData = tpl.Structure
+			}
+		}
+
+		if err := tx.Create(&model.LabSheet{
+			TaskOrderID: orderID,
+			TestItemID:  it,
+			TemplateID:  templateID,
+			NodeCode:    workflow.NodeDataEntry,
+			SheetData:   sheetData,
+			Status:      0,
+		}).Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }

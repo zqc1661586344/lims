@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, computed } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 
 interface RejectTarget {
@@ -77,7 +77,7 @@ const form = reactive({
   reject_target: '',
 })
 
-const formRules = (): FormRules => ({
+const formRules = computed<FormRules>(() => ({
   comment: [
     {
       validator: (_: unknown, value: string, callback: (e?: Error) => void) => {
@@ -92,7 +92,7 @@ const formRules = (): FormRules => ({
       trigger: 'blur',
     },
   ],
-})
+}))
 
 function open(action?: 'approve' | 'reject') {
   form.action = action ?? 'approve'

@@ -10,16 +10,20 @@
           </div>
         </div>
       </template>
-
       <el-table :data="items" stripe v-loading="loading">
         <el-table-column prop="task_order_id" label="委托ID" width="80" />
         <el-table-column prop="test_item_id" label="项目ID" width="80" />
-        <el-table-column prop="original_data" label="原始数据" min-width="220" show-overflow-tooltip />
+        <el-table-column label="检验单" min-width="200">
+          <template #default="{ row }">
+            <el-button size="small" link type="primary" @click="openSheetEditor(row)">编辑检验单</el-button>
+            <el-tag v-if="row.lab_sheet_id" type="success" size="small" style="margin-left:6px">已关联 #{{ row.lab_sheet_id }}</el-tag>
+            <el-tag v-else type="info" size="small" style="margin-left:6px">未关联</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="raw_record_id" label="原始记录ID" width="110" />
         <el-table-column prop="created_at" label="创建时间" width="170" />
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="success" @click="openApprove(row)">通过</el-button>
             <el-button size="small" type="danger" @click="openReject(row)">驳回</el-button>
           </template>
@@ -27,25 +31,19 @@
       </el-table>
     </el-card>
 
-    <!-- Form dialog -->
-    <el-dialog v-model="formVisible" :title="isEdit ? '编辑数据录入' : '新增数据录入'" width="600px">
+    <!-- 新增录入 Dialog -->
+    <el-dialog v-model="formVisible" :title="'新增数据录入'" width="500px">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="120px">
         <el-form-item label="委托ID" prop="task_order_id">
           <el-input-number v-model="form.task_order_id" :min="1" style="width:100%" />
         </el-form-item>
-        <el-form-item label="检测项目ID">
-          <el-input-number v-model="form.test_item_id" :min="0" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="原始数据">
-          <el-input v-model="form.original_data" type="textarea" :rows="4" placeholder="JSON: 原始检测数据" />
-        </el-form-item>
-        <el-form-item label="原始记录ID">
-          <el-input-number v-model="form.raw_record_id" :min="0" style="width:100%" />
+        <el-form-item label="检测项目ID" prop="test_item_id">
+          <el-input-number v-model="form.test_item_id" :min="1" style="width:100%" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="handleSave">保存并填写检验单</el-button>
       </template>
     </el-dialog>
 
@@ -53,6 +51,7 @@
       <template #header>
         <div class="approval-header">
           <span>委托ID：{{ currentRow?.task_order_id }}</span>
+          <el-tag v-if="currentRow?.lab_sheet_id" type="success" style="margin-left:8px">已关联检验单</el-tag>
         </div>
       </template>
     </ApprovalDialog>
@@ -61,14 +60,27 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
-import { getDataEntryList, getDataEntry, createDataEntry, updateDataEntry, deleteDataEntry, approveDataEntry, rejectDataEntry } from '@/api/business'
-import type { DataEntry } from '@/api/business'
+import {
+  getDataEntryList,
+  createDataEntry,
+  approveDataEntry,
+  rejectDataEntry,
+  listLabSheets,
+} from '@/api/business'
+import type { DataEntry, LabSheet } from '@/api/business'
+
+const router = useRouter()
+
+interface DataEntryRow extends DataEntry {
+  lab_sheet_id?: number | null
+}
 
 const loading = ref(false)
-const items = ref<DataEntry[]>([])
+const items = ref<DataEntryRow[]>([])
 const taskOrderIdFilter = ref('')
 
 onMounted(async () => { await loadData() })
@@ -79,32 +91,80 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (taskOrderIdFilter.value) params.task_order_id = taskOrderIdFilter.value
     const res = await getDataEntryList(params)
-    items.value = res.data
+    const list: DataEntryRow[] = res.data || []
+
+    const labSheetRes = await listLabSheets({ node_code: 'node_data_entry' })
+    const labSheets: LabSheet[] = labSheetRes.data || []
+    const sheetMap = new Map<number, LabSheet>()
+    for (const ls of labSheets) sheetMap.set(ls.task_order_id, ls)
+
+    for (const row of list) {
+      const sheet = sheetMap.get(row.task_order_id)
+      row.lab_sheet_id = sheet?.id ?? null
+    }
+
+    items.value = list
   } finally { loading.value = false }
 }
 
-const formVisible = ref(false); const isEdit = ref(false); const formRef = ref<FormInstance>(); const saving = ref(false)
-const form = reactive({ id: 0, task_order_id: 0, test_item_id: 0, original_data: '', raw_record_id: 0 })
-const formRules: FormRules = { task_order_id: [{ required: true, message: '请输入委托ID', trigger: 'blur' }] }
-function openCreate() { isEdit.value = false; form.id = 0; form.task_order_id = 0; form.test_item_id = 0; form.original_data = ''; form.raw_record_id = 0; formVisible.value = true }
-async function openEdit(row: DataEntry) { isEdit.value = true; const res = await getDataEntry(row.id); const d = res.data; form.id = d.id; form.task_order_id = d.task_order_id; form.test_item_id = d.test_item_id; form.original_data = d.original_data; form.raw_record_id = d.raw_record_id ?? 0; formVisible.value = true }
+// ─── 新增录入 ─────────────────────────────────────────────────
+
+const formVisible = ref(false)
+const formRef = ref<FormInstance>()
+const saving = ref(false)
+const form = reactive({ task_order_id: 0, test_item_id: 0 })
+const formRules: FormRules = {
+  task_order_id: [{ required: true, message: '请输入委托ID', trigger: 'blur' }],
+  test_item_id: [{ required: true, message: '请输入检测项目ID', trigger: 'blur' }],
+}
+
+function openCreate() {
+  form.task_order_id = 0
+  form.test_item_id = 0
+  formVisible.value = true
+}
+
 async function handleSave() {
-  const valid = await formRef.value?.validate().catch(() => false); if (!valid) return
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
   saving.value = true
   try {
-    const data = { task_order_id: form.task_order_id, test_item_id: form.test_item_id, original_data: form.original_data, raw_record_id: form.raw_record_id || null }
-    if (isEdit.value) { await updateDataEntry(form.id, data); ElMessage.success('更新成功') }
-    else { await createDataEntry(data); ElMessage.success('创建成功') }
-    formVisible.value = false; await loadData()
+    await createDataEntry({
+      task_order_id: form.task_order_id,
+      test_item_id: form.test_item_id,
+    })
+    ElMessage.success('创建成功，请填写检验单')
+    formVisible.value = false
+    openSheetEditor({ task_order_id: form.task_order_id, test_item_id: form.test_item_id } as DataEntryRow)
   } finally { saving.value = false }
 }
-async function handleDelete(id: number) { await deleteDataEntry(id); ElMessage.success('删除成功'); await loadData() }
+
+// ─── 检验单编辑（路由跳转）────────────────────────────────────
+
+function openSheetEditor(row: DataEntryRow) {
+  router.push({
+    name: 'LabSheetEditorPage',
+    query: {
+      task_order_id: row.task_order_id,
+      test_item_id: row.test_item_id,
+      node_code: 'node_data_entry',
+    },
+  })
+}
+
+// ─── 审批 ─────────────────────────────────────────────────────
 
 const approvalRef = ref<InstanceType<typeof ApprovalDialog>>()
-const currentRow = ref<DataEntry | null>(null)
+const currentRow = ref<DataEntryRow | null>(null)
 
-function openApprove(row: DataEntry) { currentRow.value = row; approvalRef.value?.open('approve') }
-function openReject(row: DataEntry) { currentRow.value = row; approvalRef.value?.open('reject') }
+function openApprove(row: DataEntryRow) {
+  currentRow.value = row
+  approvalRef.value?.open('approve')
+}
+function openReject(row: DataEntryRow) {
+  currentRow.value = row
+  approvalRef.value?.open('reject')
+}
 
 async function handleApprovalSubmit(data: { action: string; comment: string }) {
   if (!currentRow.value) return
@@ -129,5 +189,10 @@ async function handleApprovalSubmit(data: { action: string; comment: string }) {
   border-radius: 4px;
   font-size: 13px;
   color: #606266;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 </style>

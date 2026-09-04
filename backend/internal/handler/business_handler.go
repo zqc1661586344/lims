@@ -80,6 +80,7 @@ func (h *TaskOrderHandler) Create(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
+	fmt.Printf("[DEBUG CreateTaskOrderRequest] TestItems = %q (len=%d)\n", req.TestItems, len(req.TestItems))
 	userID := middleware.GetUserID(c)
 	item := model.TaskOrder{
 		OrderNo:      req.OrderNo,

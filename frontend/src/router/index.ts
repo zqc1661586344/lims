@@ -20,6 +20,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '工作台', icon: 'Odometer' },
       },
       {
+        path: 'univer-test',
+        name: 'UniverTest',
+        component: () => import('@/views/test/UniverTest.vue'),
+        meta: { title: 'Univer渲染测试', icon: 'DataAnalysis' },
+      },
+      {
         path: 'system/users',
         name: 'SystemUsers',
         component: () => import('@/views/system/user/index.vue'),
@@ -114,6 +120,12 @@ const routes: RouteRecordRaw[] = [
         name: 'DataEntry',
         component: () => import('@/views/business/dataEntry/index.vue'),
         meta: { title: '数据录入', icon: 'EditPen', permission: 'business:data-entry' },
+      },
+      {
+        path: 'business/lab-sheet-editor',
+        name: 'LabSheetEditorPage',
+        component: () => import('@/views/business/labSheetEditor/index.vue'),
+        meta: { title: '检验单编辑', icon: 'Document', noSidebar: true },
       },
       {
         path: 'business/data-review',
