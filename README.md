@@ -2,7 +2,7 @@
 
 基于 Go + Vue 3 的第三方检测实验室综合管理系统，覆盖从委托登记到报告归档的全流程管理，满足 CNAS 认证合规要求。
 
-> **当前开发进度：Phase 1-9 已完成**（项目骨架 → 全流程 16 节点贯通：委托 → 报告签发 → 项目归档）
+> **当前开发进度：Phase 1-9 已完成，Phase 10（检验单集成）进行中**（项目骨架 → 全流程 16 节点贯通 → Univer Sheet 检验单编辑）
 
 ---
 
@@ -108,6 +108,7 @@
 | HTTP | Axios 1.7 | HTTP 客户端 |
 | 日期 | Day.js | 日期处理 |
 | 图标 | Element Plus Icons | 图标库 |
+| 表格编辑 | Univer Sheet v0.5 | Excel 式检验单编辑、公式计算、模板管理 |
 
 ### 基础设施
 
@@ -143,12 +144,14 @@
 │   │   │   ├── audit_log.go             # 审计日志模型
 │   │   │   ├── base_data.go             # 基础数据模型（检测项目/标准/设备/试剂）
 │   │   │   ├── workflow.go              # 流程实例/任务模型
-│   │   │   └── business_models.go       # 16 节点业务模型
+│   │   │   ├── business_models.go       # 16 节点业务模型
+│   │   │   └── lab_sheet.go             # 🆕 LabSheet + LabSheetTemplate 模型（Univer Sheet 存储）
 │   │   ├── handler/
 │   │   │   ├── auth_handler.go          # 登录/登出/刷新/profile
 │   │   │   ├── base_data_handler.go     # 基础数据 CRUD
 │   │   │   ├── workflow_handler.go      # 工作流 HTTP 接口
-│   │   │   ├── business_handler.go      # 16 节点业务 handler（Phase 6-9）
+│   │   │   ├── lab_sheet_handler.go     # 🆕 检验单 CRUD + 模板管理
+│   │   │   ├── {node}_handler.go        # 16 节点各自独立 handler
 │   │   │   └── system/                  # RBAC 控制器（user/dept/role/permission）
 │   │   ├── service/
 │   │   │   ├── workflow_service.go      # 工作流服务封装
@@ -165,7 +168,8 @@
 │   │   │       ├── system_routes.go     # RBAC 路由注册
 │   │   │       ├── base_data_routes.go  # 基础数据路由
 │   │   │       ├── workflow_routes.go   # 工作流路由
-│   │   │       └── business_routes.go   # 16 业务节点路由（Phase 6-9）
+│   │   │       ├── business_routes.go   # 16 业务节点路由
+│   │   │       └── lab_sheet_routes.go  # 🆕 检验单 + 模板路由
 │   │   ├── seed/seed.go                 # 初始数据：7 部门 + admin 用户
 │   │   └── utils/
 │   │       ├── jwt.go                   # JWT 工具
@@ -186,7 +190,8 @@
 │   │   │   ├── ApprovalDialog.vue      # 审批弹窗（所有节点共用）
 │   │   │   ├── TaskList.vue            # 待办任务列表
 │   │   │   ├── ProcessTimeline.vue     # 流程时间线
-│   │   │   └── FileUpload.vue          # 文件上传
+│   │   │   ├── FileUpload.vue          # 文件上传
+│   │   │   └── LabSheetEditor.vue      # 🆕 通用 Univer Sheet 编辑器（支持 edit/readonly 模式）
 │   │   ├── layouts/
 │   │   │   ├── MainLayout.vue          # 主布局（侧边栏+顶栏）
 │   │   │   └── Sidebar.vue             # 侧边导航（新菜单加这里）
@@ -197,8 +202,8 @@
 │   │   │   ├── dashboard/index.vue     # 工作台
 │   │   │   ├── system/                 # RBAC 管理页（user/dept/role）
 │   │   │   ├── baseData/               # 基础数据页（items/standards/equipment/reagents）
-│   │   │   └── business/               # 16 业务节点页（taskOrder → projectArchive）
-│   │   └── App.vue / main.ts           # 组件与应用入口
+│   │   │   ├── business/               # 16 业务节点页 + labSheetEditor/（检验单全屏编辑，供数据录入/复核/审核等节点复用）
+│   │   │   └── App.vue / main.ts           # 组件与应用入口
 │   ├── nginx/lims.conf                 # Nginx 配置
 │   ├── Dockerfile
 │   ├── vite.config.ts
@@ -210,7 +215,10 @@
 ├── docs/
 │   ├── process.md                      # 业务流程 Mermaid 图
 │   ├── business-workflow.md            # 商务流程流转说明
-│   └── LIMS第三方实验室管理系统 —— 详细技术设计方案（正式版）.md
+│   ├── 16-node-flow-quickref.md        # 16 节点快速参考
+│   ├── development-plan.md             # 开发计划
+│   ├── univer-sheet-integration-plan.md # 🆕 Univer Sheet 集成方案
+│   └── LIMS第三方实验室管理系统技术设计方案v1.md  # 技术设计方案
 ├── Makefile                            # 常用命令入口
 └── .gitignore
 ```
@@ -232,6 +240,7 @@
 | **Phase 7** 实验室检测流程 | ✅ **已完成** | 节点 7-10（任务分配/数据录入/复核/审核） |
 | **Phase 8** 报告工作流 | ✅ **已完成** | 节点 11-13（报告编制/复核/审核） |
 | **Phase 9** 报告签发/打印/归档 | ✅ **已完成** | 节点 14-16（报告签发/发放/归档），全流程 16 节点贯通 |
+| **Phase 10** 检验单集成 | 🔶 **进行中** | Univer Sheet 集成、LabSheet/LabSheetTemplate 模型、检验单全屏编辑页、数据录入节点对接（复核/审核节点只读模式待接入） |
 
 ---
 
@@ -427,6 +436,27 @@ cd frontend && npx vue-tsc --noEmit
 
 > 节点 2-16 均支持 `GET /:id/approve`（通过）与 `GET /:id/reject`（驳回）。任务委托（节点 1）是流程起点无审批；项目归档（节点 16）是终节点不可驳回。
 
+### 检验单 (Lab Sheet / Univer Sheet)
+
+检验单基于 Univer Sheet 实现 Excel 式编辑，每个检测项目可关联独立模板。
+
+**模板管理：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/lab-sheets/templates` | 模板列表 / 创建模板 |
+| GET/PUT/DELETE | `/api/lab-sheets/templates/:id` | 模板详情 / 更新 / 删除 |
+| GET | `/api/lab-sheets/templates/by-item/:testItemID` | 按检测项目查询模板 |
+
+**检验单实例：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/lab-sheets` | 检验单列表 / 创建（参数: task_order_id, test_item_id, node_code, sheet_data） |
+| GET/PUT/DELETE | `/api/lab-sheets/:id` | 详情 / 更新（sheet_data, formula_results, status） / 删除 |
+
+> `sheet_data` 为 Univer Sheet Workbook JSON（jsonb 字段），包含完整的表格结构、单元格数据和公式。
+
 ---
 
 ## 权限系统设计
@@ -469,18 +499,24 @@ cd frontend && npx vue-tsc --noEmit
 
 ## 后续开发路线
 
-全流程 16 节点（Phase 1-9）已全部完成。后续可根据业务需要扩展：
+全流程 16 节点（Phase 1-9）已全部完成，检验单集成（Phase 10）进行中。
 
 ```
 ✅ Phase 1-9 全部完成（委托 → 报告签发/发放 → 项目归档）
-   │
-   └── 可扩展方向
-       │
-       ├── Redis 集成（缓存 / 分布式会话）
-       ├── 检测报告电子签章对接
-       ├── 客户委托自助下单 / 进度查询
-       ├── 消息通知（待办提醒）
-       └── 多实验室 / 多分支机构支持
+🔶 Phase 10 检验单集成（进行中）
+   ├── ✅ Univer Sheet 组件封装（LabSheetEditor.vue）
+   ├── ✅ LabSheet / LabSheetTemplate 数据模型 + API
+   ├── ✅ 数据录入节点 → 检验单全屏编辑页（/business/lab-sheet-editor）
+   ├── 📝 数据复核节点 → 检验单只读模式 + 批注
+   ├── 📝 数据审核节点 → 检验单只读模式 + 审核意见
+   └── 📝 检验单模板管理页面
+
+可扩展方向：
+   ├── Redis 集成（缓存 / 分布式会话）
+   ├── 检测报告电子签章对接
+   ├── 客户委托自助下单 / 进度查询
+   ├── 消息通知（待办提醒）
+   └── 多实验室 / 多分支机构支持
 ```
 
 ---
