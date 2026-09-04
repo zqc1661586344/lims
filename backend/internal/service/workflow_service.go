@@ -7,17 +7,22 @@ import (
 	"gorm.io/gorm"
 )
 
-// WorkflowService wraps the workflow engine with business logic.
+// WorkflowService wraps the workflow engine for workflow-level (taskID-based)
+// operations. ApproveTask / RejectTask delegate to BusinessService so that
+// every transition — regardless of caller entry point — atomically advances
+// the process state machine AND ensures the target node's business record.
 type WorkflowService struct {
-	logger *zap.Logger
-	engine *workflow.Engine
+	logger   *zap.Logger
+	engine   *workflow.Engine
+	business *BusinessService
 }
 
 // NewWorkflowService creates a new workflow service.
 func NewWorkflowService(logger *zap.Logger, db *gorm.DB) *WorkflowService {
 	return &WorkflowService{
-		logger: logger,
-		engine: workflow.DefaultEngine(db),
+		logger:   logger,
+		engine:   workflow.DefaultEngine(db),
+		business: NewBusinessService(logger, db),
 	}
 }
 
@@ -26,19 +31,21 @@ func (s *WorkflowService) StartInstance(businessType string, businessID uint, ti
 	return s.engine.StartInstance(businessType, businessID, title, createdBy)
 }
 
-// ApproveTask approves a pending task.
+// ApproveTask delegates to BusinessService.ApproveTask to guarantee business
+// record creation for the next node.
 func (s *WorkflowService) ApproveTask(taskID uint, userID uint, comment string) error {
-	return s.engine.ApproveTask(taskID, userID, comment)
+	return s.business.ApproveTask(taskID, userID, comment)
 }
 
-// RejectTask rejects a pending task.
+// RejectTask delegates to BusinessService.RejectTask to guarantee business
+// record creation for the reject-target node.
 func (s *WorkflowService) RejectTask(taskID uint, userID uint, comment string) error {
-	return s.engine.RejectTask(taskID, userID, comment)
+	return s.business.RejectTask(taskID, userID, comment)
 }
 
 // GetPendingTasks returns pending tasks.
 //   - isAdmin=true  → all departments' pending tasks (cross-department admin view)
-//   - otherwise, if deptID is set  → that department's pending tasks
+//   - otherwise if deptID is set  → that department's pending tasks
 //   - otherwise                  → current user's pending tasks
 func (s *WorkflowService) GetPendingTasks(deptID *uint, userID uint, isAdmin bool) ([]map[string]interface{}, error) {
 	if isAdmin {
