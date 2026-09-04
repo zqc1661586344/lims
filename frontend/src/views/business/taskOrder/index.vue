@@ -185,13 +185,9 @@ async function handleSave() {
 }
 
 async function handleSubmit(row: TaskOrder) {
-  try {
-    await submitTaskOrder(row.id)
-    ElMessage.success('提交成功，流程已启动')
-    await loadData()
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '提交失败')
-  }
+  await submitTaskOrder(row.id)
+  ElMessage.success('提交成功，流程已启动')
+  await loadData()
 }
 
 async function handleDelete(id: number) {

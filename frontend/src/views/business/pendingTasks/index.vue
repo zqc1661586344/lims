@@ -100,18 +100,14 @@ async function showDetail(task: unknown) {
 }
 
 async function handleApprovalSubmit(data: { action: string; comment: string; reject_target?: string }) {
-  try {
-    if (data.action === 'approve') {
-      await approveTask(currentTaskId, { comment: data.comment })
-      ElMessage.success('审批通过')
-    } else {
-      await rejectTask(currentTaskId, { comment: data.comment })
-      ElMessage.success('已驳回')
-    }
-    await loadTasks()
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '操作失败')
+  if (data.action === 'approve') {
+    await approveTask(currentTaskId, { comment: data.comment })
+    ElMessage.success('审批通过')
+  } else {
+    await rejectTask(currentTaskId, { comment: data.comment })
+    ElMessage.success('已驳回')
   }
+  await loadTasks()
 }
 </script>
 
