@@ -1,6 +1,6 @@
-# 商务流程流转说明
+# 检测管理流转说明
 
-> 本文档基于 `docs/process.md` 业务流程图与 `backend/internal/workflow/definition.go` 状态机整理，描述完整"商务流程"从开始到结束的执行顺序。
+> 本文档基于 `docs/process.md` 业务流程图与 `backend/internal/workflow/definition.go` 状态机整理，描述完整"检测管理"从开始到结束的执行顺序。
 
 ## 一、流程总览
 

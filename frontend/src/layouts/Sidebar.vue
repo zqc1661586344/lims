@@ -37,7 +37,7 @@
         </el-menu-item>
       </el-sub-menu>
 
-      <el-sub-menu index="base-data" v-if="checkAny(['base-data:items', 'base-data:standards', 'base-data:equipment', 'base-data:reagents'])">
+      <el-sub-menu index="base-data" v-if="checkAny(['base-data:items', 'base-data:standards', 'base-data:reagents'])">
         <template #title>
           <el-icon><FolderOpened /></el-icon>
           <span>基础数据</span>
@@ -50,20 +50,38 @@
           <el-icon><Document /></el-icon>
           <template #title>检测标准</template>
         </el-menu-item>
-        <el-menu-item index="/base-data/equipment" v-if="checkPerm('base-data:equipment')">
-          <el-icon><Monitor /></el-icon>
-          <template #title>仪器设备</template>
-        </el-menu-item>
         <el-menu-item index="/base-data/reagents" v-if="checkPerm('base-data:reagents')">
           <el-icon><Box /></el-icon>
-          <template #title>试剂耗材</template>
+          <template #title>物资管理</template>
+        </el-menu-item>
+      </el-sub-menu>
+
+      <el-sub-menu index="equipment" v-if="checkPerm('base-data:equipment')">
+        <template #title>
+          <el-icon><Monitor /></el-icon>
+          <span>仪器设备</span>
+        </template>
+        <el-menu-item index="/equipment/list" v-if="checkPerm('base-data:equipment')">
+          <el-icon><Monitor /></el-icon>
+          <template #title>设备台账</template>
+        </el-menu-item>
+      </el-sub-menu>
+
+      <el-sub-menu index="form">
+        <template #title>
+          <el-icon><Tickets /></el-icon>
+          <span>表单管理</span>
+        </template>
+        <el-menu-item index="/form/templates" v-if="checkPerm('base-data:items')">
+          <el-icon><Document /></el-icon>
+          <template #title>表单模板管理</template>
         </el-menu-item>
       </el-sub-menu>
 
       <el-sub-menu index="business" v-if="hasAnyBusinessPerm">
         <template #title>
           <el-icon><TrendCharts /></el-icon>
-          <span>商务流程</span>
+          <span>检测管理</span>
         </template>
         <el-menu-item index="/business/pending-tasks">
           <el-icon><Bell /></el-icon>
@@ -145,7 +163,7 @@ import { useUserStore } from '@/stores/user'
 import {
   Odometer, Setting, User, OfficeBuilding, Key, FolderOpened, List, Document,
   Monitor, Box, TrendCharts, Bell, Edit, DataAnalysis, Calendar, Location,
-  UserFilled, EditPen, Search, Finished, Stamp, Printer,
+  UserFilled, EditPen, Search, Finished, Stamp, Printer, Tickets,
 } from '@element-plus/icons-vue'
 
 const props = withDefaults(defineProps<{ collapsed: boolean }>(), {

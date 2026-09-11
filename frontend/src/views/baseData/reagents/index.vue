@@ -3,10 +3,10 @@
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>试剂耗材管理</span>
+          <span>物资管理</span>
           <div>
             <el-input v-model="keyword" placeholder="搜索名称/编号" clearable style="width:200px;margin-right:8px" @clear="loadData" @keyup.enter="loadData" />
-            <el-button type="primary" @click="openCreate">新增试剂</el-button>
+            <el-button type="primary" @click="openCreate">新增物资</el-button>
           </div>
         </div>
       </template>

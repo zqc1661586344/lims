@@ -13,41 +13,32 @@ import (
 	"gorm.io/gorm"
 )
 
-// LabSheetHandler handles CRUD for LabSheet (检验单实例) and LabSheetTemplate (模板).
-type LabSheetHandler struct {
+type SamplingSheetHandler struct {
 	logger *zap.Logger
 	db     *gorm.DB
 }
 
-func NewLabSheetHandler(logger *zap.Logger, db *gorm.DB) *LabSheetHandler {
-	return &LabSheetHandler{logger: logger, db: db}
+func NewSamplingSheetHandler(logger *zap.Logger, db *gorm.DB) *SamplingSheetHandler {
+	return &SamplingSheetHandler{logger: logger, db: db}
 }
 
-func (h *LabSheetHandler) getDB(c *gin.Context) *gorm.DB {
+func (h *SamplingSheetHandler) getDB(c *gin.Context) *gorm.DB {
 	if db := middleware.GetDB(c); db != nil {
 		return db
 	}
 	return h.db
 }
 
-func toUint(s string) (uint, error) {
-	n, err := strconv.ParseUint(s, 10, 32)
-	if err != nil {
-		return 0, err
-	}
-	return uint(n), nil
-}
+// ─── SamplingSheetTemplate CRUD ──────────────────────────────────
 
-// ─── LabSheetTemplate CRUD ──────────────────────────────────────
-
-func (h *LabSheetHandler) ListTemplates(c *gin.Context) {
-	var items []model.LabSheetTemplate
+func (h *SamplingSheetHandler) ListTemplates(c *gin.Context) {
+	var items []model.SamplingSheetTemplate
 	query := h.getDB(c).Order("version DESC, id DESC")
 	if name := c.Query("name"); name != "" {
 		query = query.Where("name ILIKE ?", "%"+name+"%")
 	}
-	if testItemID := c.Query("test_item_id"); testItemID != "" {
-		query = query.Where("test_item_id = ?", testItemID)
+	if sampleType := c.Query("sample_type"); sampleType != "" {
+		query = query.Where("sample_type = ?", sampleType)
 	}
 	if nodeCode := c.Query("node_code"); nodeCode != "" {
 		query = query.Where("node_code = ?", nodeCode)
@@ -56,31 +47,31 @@ func (h *LabSheetHandler) ListTemplates(c *gin.Context) {
 		query = query.Where("status = ?", status)
 	}
 	if err := query.Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询模板失败: %v", err))
+		utils.InternalError(c, fmt.Sprintf("查询采样单模板失败: %v", err))
 		return
 	}
 	utils.Success(c, items)
 }
 
-func (h *LabSheetHandler) GetTemplate(c *gin.Context) {
-	id, err := toUint(c.Param("id"))
+func (h *SamplingSheetHandler) GetTemplate(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	var item model.LabSheetTemplate
+	var item model.SamplingSheetTemplate
 	if err := h.getDB(c).First(&item, id).Error; err != nil {
-		utils.NotFound(c, "模板不存在")
+		utils.NotFound(c, "采样单模板不存在")
 		return
 	}
 	utils.Success(c, item)
 }
 
-func (h *LabSheetHandler) CreateTemplate(c *gin.Context) {
+func (h *SamplingSheetHandler) CreateTemplate(c *gin.Context) {
 	var req struct {
 		Code           string          `json:"code" binding:"required"`
 		Name           string          `json:"name" binding:"required"`
-		TestItemID     uint            `json:"test_item_id"`
+		SampleType     string          `json:"sample_type"`
 		NodeCode       string          `json:"node_code"`
 		Structure      json.RawMessage `json:"structure" binding:"required"`
 		EditableRanges json.RawMessage `json:"editable_ranges"`
@@ -91,10 +82,10 @@ func (h *LabSheetHandler) CreateTemplate(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	tpl := model.LabSheetTemplate{
+	tpl := model.SamplingSheetTemplate{
 		Code:           req.Code,
 		Name:           req.Name,
-		TestItemID:     req.TestItemID,
+		SampleType:     req.SampleType,
 		NodeCode:       req.NodeCode,
 		Structure:      req.Structure,
 		EditableRanges: req.EditableRanges,
@@ -109,27 +100,27 @@ func (h *LabSheetHandler) CreateTemplate(c *gin.Context) {
 		tpl.ReadOnlyRanges = json.RawMessage("[]")
 	}
 	if err := h.getDB(c).Create(&tpl).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("创建模板失败: %v", err))
+		utils.InternalError(c, fmt.Sprintf("创建采样单模板失败: %v", err))
 		return
 	}
 	utils.Success(c, tpl)
 }
 
-func (h *LabSheetHandler) UpdateTemplate(c *gin.Context) {
-	id, err := toUint(c.Param("id"))
+func (h *SamplingSheetHandler) UpdateTemplate(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	var tpl model.LabSheetTemplate
+	var tpl model.SamplingSheetTemplate
 	if err := h.getDB(c).First(&tpl, id).Error; err != nil {
-		utils.NotFound(c, "模板不存在")
+		utils.NotFound(c, "采样单模板不存在")
 		return
 	}
 	var req struct {
 		Code           string          `json:"code"`
 		Name           string          `json:"name"`
-		TestItemID     uint            `json:"test_item_id"`
+		SampleType     string          `json:"sample_type"`
 		NodeCode       string          `json:"node_code"`
 		Structure      json.RawMessage `json:"structure"`
 		EditableRanges json.RawMessage `json:"editable_ranges"`
@@ -147,7 +138,7 @@ func (h *LabSheetHandler) UpdateTemplate(c *gin.Context) {
 	if req.Name != "" {
 		tpl.Name = req.Name
 	}
-	tpl.TestItemID = req.TestItemID
+	tpl.SampleType = req.SampleType
 	tpl.NodeCode = req.NodeCode
 	if len(req.Structure) > 0 {
 		tpl.Structure = req.Structure
@@ -163,61 +154,58 @@ func (h *LabSheetHandler) UpdateTemplate(c *gin.Context) {
 	}
 	tpl.Status = req.Status
 	if err := h.getDB(c).Save(&tpl).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("更新模板失败: %v", err))
+		utils.InternalError(c, fmt.Sprintf("更新采样单模板失败: %v", err))
 		return
 	}
 	utils.Success(c, tpl)
 }
 
-func (h *LabSheetHandler) DeleteTemplate(c *gin.Context) {
-	id, err := toUint(c.Param("id"))
+func (h *SamplingSheetHandler) DeleteTemplate(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	res := h.getDB(c).Delete(&model.LabSheetTemplate{}, id)
+	res := h.getDB(c).Delete(&model.SamplingSheetTemplate{}, id)
 	if res.Error != nil {
-		utils.InternalError(c, fmt.Sprintf("删除模板失败: %v", res.Error))
+		utils.InternalError(c, fmt.Sprintf("删除采样单模板失败: %v", res.Error))
 		return
 	}
 	if res.RowsAffected == 0 {
-		utils.NotFound(c, "模板不存在")
+		utils.NotFound(c, "采样单模板不存在")
 		return
 	}
 	utils.Success(c, gin.H{"deleted": id})
 }
 
-func (h *LabSheetHandler) GetTemplateByItem(c *gin.Context) {
-	testItemID, err := toUint(c.Param("testItemID"))
-	if err != nil {
-		utils.BadRequest(c, "无效的检测项目ID")
+func (h *SamplingSheetHandler) GetTemplateBySampleType(c *gin.Context) {
+	sampleType := c.Param("sampleType")
+	if sampleType == "" {
+		utils.BadRequest(c, "缺少样品类型参数")
 		return
 	}
-	var tpl model.LabSheetTemplate
+	var tpl model.SamplingSheetTemplate
 	if err := h.getDB(c).
-		Where("test_item_id = ? AND status = 1", testItemID).
+		Where("sample_type = ? AND status = 1", sampleType).
 		Order("version DESC").
 		First(&tpl).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			utils.NotFound(c, "该检测项目暂无可用模板")
+			utils.NotFound(c, "该样品类型暂无可用采样单模板")
 		} else {
-			utils.InternalError(c, fmt.Sprintf("查询模板失败: %v", err))
+			utils.InternalError(c, fmt.Sprintf("查询采样单模板失败: %v", err))
 		}
 		return
 	}
 	utils.Success(c, tpl)
 }
 
-// ─── LabSheet (instance) CRUD ────────────────────────────────────
+// ─── SamplingSheet (instance) CRUD ───────────────────────────────
 
-func (h *LabSheetHandler) List(c *gin.Context) {
-	var items []model.LabSheet
+func (h *SamplingSheetHandler) List(c *gin.Context) {
+	var items []model.SamplingSheet
 	query := h.getDB(c).Preload("Template").Order("id DESC")
 	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
 		query = query.Where("task_order_id = ?", taskOrderID)
-	}
-	if testItemID := c.Query("test_item_id"); testItemID != "" {
-		query = query.Where("test_item_id = ?", testItemID)
 	}
 	if nodeCode := c.Query("node_code"); nodeCode != "" {
 		query = query.Where("node_code = ?", nodeCode)
@@ -226,33 +214,34 @@ func (h *LabSheetHandler) List(c *gin.Context) {
 		query = query.Where("status = ?", status)
 	}
 	if err := query.Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询检验单失败: %v", err))
+		utils.InternalError(c, fmt.Sprintf("查询采样单失败: %v", err))
 		return
 	}
 	utils.Success(c, items)
 }
 
-func (h *LabSheetHandler) Get(c *gin.Context) {
-	id, err := toUint(c.Param("id"))
+func (h *SamplingSheetHandler) Get(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	var item model.LabSheet
+	var item model.SamplingSheet
 	if err := h.getDB(c).Preload("Template").First(&item, id).Error; err != nil {
-		utils.NotFound(c, "检验单不存在")
+		utils.NotFound(c, "采样单不存在")
 		return
 	}
 	utils.Success(c, item)
 }
 
-func (h *LabSheetHandler) Create(c *gin.Context) {
+func (h *SamplingSheetHandler) Create(c *gin.Context) {
 	var req struct {
-		TaskOrderID uint            `json:"task_order_id" binding:"required"`
-		TestItemID  uint            `json:"test_item_id" binding:"required"`
-		TemplateID  *uint           `json:"template_id"`
-		NodeCode    string          `json:"node_code"`
-		SheetData   json.RawMessage `json:"sheet_data"`
+		TaskOrderID   uint            `json:"task_order_id" binding:"required"`
+		SamplingPoint string          `json:"sampling_point"`
+		SampleType    string          `json:"sample_type"`
+		TemplateID    *uint           `json:"template_id"`
+		NodeCode      string          `json:"node_code"`
+		SheetData     json.RawMessage `json:"sheet_data"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
@@ -260,13 +249,17 @@ func (h *LabSheetHandler) Create(c *gin.Context) {
 	}
 
 	if req.TemplateID == nil {
-		var tpl model.LabSheetTemplate
-		if err := h.getDB(c).
-			Where("test_item_id = ? AND status = 1", req.TestItemID).
-			Order("version DESC").
-			First(&tpl).Error; err != nil {
+		var tpl model.SamplingSheetTemplate
+		query := h.getDB(c).Where("status = 1")
+		if req.SampleType != "" {
+			query = query.Where("sample_type = ?", req.SampleType)
+		}
+		if req.NodeCode != "" {
+			query = query.Where("node_code = ?", req.NodeCode)
+		}
+		if err := query.Order("version DESC").First(&tpl).Error; err != nil {
 			if err != gorm.ErrRecordNotFound {
-				utils.InternalError(c, fmt.Sprintf("查询模板失败: %v", err))
+				utils.InternalError(c, fmt.Sprintf("查询采样单模板失败: %v", err))
 				return
 			}
 		} else {
@@ -278,36 +271,37 @@ func (h *LabSheetHandler) Create(c *gin.Context) {
 		}
 	}
 
-	instance := model.LabSheet{
-		TaskOrderID: req.TaskOrderID,
-		TestItemID:  req.TestItemID,
-		TemplateID:  req.TemplateID,
-		NodeCode:    req.NodeCode,
-		SheetData:   req.SheetData,
-		Status:      0,
+	instance := model.SamplingSheet{
+		TaskOrderID:   req.TaskOrderID,
+		SamplingPoint: req.SamplingPoint,
+		TemplateID:    req.TemplateID,
+		NodeCode:      req.NodeCode,
+		SheetData:     req.SheetData,
+		Status:        0,
 	}
 	if len(instance.SheetData) == 0 {
 		instance.SheetData = json.RawMessage("{}")
 	}
 	if err := h.getDB(c).Create(&instance).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("创建检验单失败: %v", err))
+		utils.InternalError(c, fmt.Sprintf("创建采样单失败: %v", err))
 		return
 	}
 	utils.Success(c, instance)
 }
 
-func (h *LabSheetHandler) Update(c *gin.Context) {
-	id, err := toUint(c.Param("id"))
+func (h *SamplingSheetHandler) Update(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	var instance model.LabSheet
+	var instance model.SamplingSheet
 	if err := h.getDB(c).First(&instance, id).Error; err != nil {
-		utils.NotFound(c, "检验单不存在")
+		utils.NotFound(c, "采样单不存在")
 		return
 	}
 	var req struct {
+		SamplingPoint  string          `json:"sampling_point"`
 		SheetData      json.RawMessage `json:"sheet_data"`
 		FormulaResults json.RawMessage `json:"formula_results"`
 		Status         *int            `json:"status"`
@@ -316,6 +310,9 @@ func (h *LabSheetHandler) Update(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
+	}
+	if req.SamplingPoint != "" {
+		instance.SamplingPoint = req.SamplingPoint
 	}
 	if len(req.SheetData) > 0 {
 		instance.SheetData = req.SheetData
@@ -332,25 +329,25 @@ func (h *LabSheetHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	instance.UpdatedBy = &userID
 	if err := h.getDB(c).Save(&instance).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("保存检验单失败: %v", err))
+		utils.InternalError(c, fmt.Sprintf("保存采样单失败: %v", err))
 		return
 	}
 	utils.Success(c, instance)
 }
 
-func (h *LabSheetHandler) Delete(c *gin.Context) {
-	id, err := toUint(c.Param("id"))
+func (h *SamplingSheetHandler) Delete(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	res := h.getDB(c).Delete(&model.LabSheet{}, id)
+	res := h.getDB(c).Delete(&model.SamplingSheet{}, id)
 	if res.Error != nil {
-		utils.InternalError(c, fmt.Sprintf("删除检验单失败: %v", res.Error))
+		utils.InternalError(c, fmt.Sprintf("删除采样单失败: %v", res.Error))
 		return
 	}
 	if res.RowsAffected == 0 {
-		utils.NotFound(c, "检验单不存在")
+		utils.NotFound(c, "采样单不存在")
 		return
 	}
 	utils.Success(c, gin.H{"deleted": id})

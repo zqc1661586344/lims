@@ -37,8 +37,8 @@ function buildWorkbookData(existingData?: any) {
       [sheetId]: {
         id: sheetId,
         name: 'Sheet1',
-        rowCount: 50,
-        columnCount: 15,
+        rowCount: 200,
+        columnCount: 30,
         cellData: {},
         columnData: {},
         rowData: {},

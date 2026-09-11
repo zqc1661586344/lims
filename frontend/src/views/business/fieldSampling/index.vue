@@ -13,6 +13,13 @@
 
       <el-table :data="items" stripe v-loading="loading">
         <el-table-column prop="task_order_id" label="委托ID" width="80" />
+        <el-table-column label="采样单" min-width="200">
+          <template #default="{ row }">
+            <el-button size="small" link type="primary" @click="openSheetEditor(row)">编辑采样单</el-button>
+            <el-tag v-if="row.sampling_sheet_id" type="success" size="small" style="margin-left:6px">已关联 #{{ row.sampling_sheet_id }}</el-tag>
+            <el-tag v-else type="info" size="small" style="margin-left:6px">未关联</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="sample_photos" label="现场照片" min-width="160" show-overflow-tooltip />
         <el-table-column prop="equipment_cal_records" label="设备校准" min-width="160" show-overflow-tooltip />
         <el-table-column prop="sampling_record_file_path" label="采样记录文件" min-width="180" show-overflow-tooltip />
@@ -61,14 +68,21 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
-import { getFieldSamplingList, getFieldSampling, createFieldSampling, updateFieldSampling, deleteFieldSampling, approveFieldSampling, rejectFieldSampling } from '@/api/business'
-import type { FieldSamplingRecord } from '@/api/business'
+import { getFieldSamplingList, getFieldSampling, createFieldSampling, updateFieldSampling, deleteFieldSampling, approveFieldSampling, rejectFieldSampling, listSamplingSheets } from '@/api/business'
+import type { FieldSamplingRecord, SamplingSheet } from '@/api/business'
+
+const router = useRouter()
+
+interface FieldSamplingRow extends FieldSamplingRecord {
+  sampling_sheet_id?: number | null
+}
 
 const loading = ref(false)
-const items = ref<FieldSamplingRecord[]>([])
+const items = ref<FieldSamplingRow[]>([])
 const taskOrderIdFilter = ref('')
 
 onMounted(async () => { await loadData() })
@@ -79,8 +93,30 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (taskOrderIdFilter.value) params.task_order_id = taskOrderIdFilter.value
     const res = await getFieldSamplingList(params)
-    items.value = res.data
+    const list: FieldSamplingRow[] = res.data || []
+
+    const sheetRes = await listSamplingSheets({ node_code: 'node_field_sampling' })
+    const sheets: SamplingSheet[] = sheetRes.data || []
+    const sheetMap = new Map<number, SamplingSheet>()
+    for (const s of sheets) sheetMap.set(s.task_order_id, s)
+
+    for (const row of list) {
+      const sheet = sheetMap.get(row.task_order_id)
+      row.sampling_sheet_id = sheet?.id ?? null
+    }
+
+    items.value = list
   } finally { loading.value = false }
+}
+
+function openSheetEditor(row: FieldSamplingRow) {
+  router.push({
+    name: 'SamplingSheetEditorPage',
+    query: {
+      task_order_id: row.task_order_id,
+      node_code: 'node_field_sampling',
+    },
+  })
 }
 
 const formVisible = ref(false); const isEdit = ref(false); const formRef = ref<FormInstance>(); const saving = ref(false)

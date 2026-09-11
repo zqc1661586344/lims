@@ -64,6 +64,8 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 		routes.RegisterBusinessRoutes(api, cfg, logger, db)
 		// Register lab sheet routes (Univer Sheet 检验单)
 		routes.RegisterLabSheetRoutes(api, cfg, logger, db)
+		// Register sampling sheet routes (Univer Sheet 采样单)
+		routes.RegisterSamplingSheetRoutes(api, cfg, logger, db)
 	}
 
 	return r
@@ -103,5 +105,7 @@ func autoMigrate(logger *zap.Logger, db *gorm.DB) {
 		&model.ProjectArchive{},
 		&model.LabSheetTemplate{},
 		&model.LabSheet{},
+		&model.SamplingSheetTemplate{},
+		&model.SamplingSheet{},
 	)
 }

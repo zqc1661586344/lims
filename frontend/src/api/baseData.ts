@@ -139,7 +139,7 @@ export function deleteEquipment(id: number) {
   return request.delete(`/base-data/equipment/${id}`)
 }
 
-/* ---- Reagents (试剂耗材) ---- */
+/* ---- Reagents (物资管理) ---- */
 export interface Reagent {
   id: number
   name: string

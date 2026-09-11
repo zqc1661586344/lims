@@ -228,7 +228,7 @@ func (AuditLog) TableName() string { return "audit_logs" }
 
 **状态**: ✅ **已完成**
 
-**目标**: 检测项目/标准/仪器设备/试剂耗材 完整CRUD + Excel导入导出
+**目标**: 检测项目/标准/仪器设备/物资管理 完整CRUD + Excel导入导出
 
 **数据模型** (model/base_data.go):
 

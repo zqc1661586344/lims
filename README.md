@@ -214,7 +214,7 @@
 │   └── nginx/lims.conf                 # 生产 Nginx 配置
 ├── docs/
 │   ├── process.md                      # 业务流程 Mermaid 图
-│   ├── business-workflow.md            # 商务流程流转说明
+│   ├── business-workflow.md            # 检测管理流转说明
 │   ├── 16-node-flow-quickref.md        # 16 节点快速参考
 │   ├── development-plan.md             # 开发计划
 │   ├── univer-sheet-integration-plan.md # 🆕 Univer Sheet 集成方案

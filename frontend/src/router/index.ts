@@ -56,8 +56,8 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '检测标准', icon: 'Document', permission: 'base-data:standards' },
       },
       {
-        path: 'base-data/equipment',
-        name: 'BaseDataEquipment',
+        path: 'equipment/list',
+        name: 'EquipmentList',
         component: () => import('@/views/baseData/equipment/index.vue'),
         meta: { title: '仪器设备', icon: 'Monitor', permission: 'base-data:equipment' },
       },
@@ -65,7 +65,13 @@ const routes: RouteRecordRaw[] = [
         path: 'base-data/reagents',
         name: 'BaseDataReagents',
         component: () => import('@/views/baseData/reagents/index.vue'),
-        meta: { title: '试剂耗材', icon: 'Box', permission: 'base-data:reagents' },
+        meta: { title: '物资管理', icon: 'Box', permission: 'base-data:reagents' },
+      },
+      {
+        path: 'form/templates',
+        name: 'TemplateManage',
+        component: () => import('@/views/baseData/templateManage/index.vue'),
+        meta: { title: '表单模板管理', icon: 'Document', permission: 'base-data:items' },
       },
       {
         path: 'business/pending-tasks',
@@ -126,6 +132,12 @@ const routes: RouteRecordRaw[] = [
         name: 'LabSheetEditorPage',
         component: () => import('@/views/business/labSheetEditor/index.vue'),
         meta: { title: '检验单编辑', icon: 'Document', noSidebar: true },
+      },
+      {
+        path: 'business/sampling-sheet-editor',
+        name: 'SamplingSheetEditorPage',
+        component: () => import('@/views/business/samplingSheetEditor/index.vue'),
+        meta: { title: '采样单编辑', icon: 'Document', noSidebar: true },
       },
       {
         path: 'business/data-review',
