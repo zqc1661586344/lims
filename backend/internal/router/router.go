@@ -5,7 +5,9 @@ import (
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
 	"lims-backend/internal/router/routes"
+	"strings"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -35,17 +37,27 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 	// Global middleware
 	r.Use(middleware.Recovery(logger))
 	r.Use(middleware.LoggerMiddleware(logger))
-	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Disposition")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
-	})
+
+	// CORS: 使用 AllowOriginFunc 精确控制 Origin 校验，绕过库内部 normalize 的大小写问题
+	r.Use(cors.New(cors.Config{
+		AllowOriginFunc: func(origin string) bool {
+			if cfg.Env == "development" {
+				return strings.HasPrefix(origin, "http://localhost:") ||
+					strings.HasPrefix(origin, "http://127.0.0.1:") ||
+					strings.HasPrefix(origin, "http://0.0.0.0:")
+			}
+			for _, allowed := range cfg.CORS.AllowOrigins {
+				if allowed == origin {
+					return true
+				}
+			}
+			return false
+		},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length", "Content-Disposition"},
+		AllowCredentials: true,
+	}))
 
 	// API routes
 	api := r.Group("/api")
