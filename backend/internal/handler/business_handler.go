@@ -17,58 +17,26 @@ import (
 // ============================================================
 
 type TaskOrderHandler struct {
+	*GenericHandler[model.TaskOrder]
 	svc *service.BusinessService
-	db  *gorm.DB
 }
 
 func NewTaskOrderHandler(logger *zap.Logger, db *gorm.DB) *TaskOrderHandler {
 	return &TaskOrderHandler{
-		svc: service.NewBusinessService(logger, db),
-		db:  db,
+		GenericHandler: NewGenericHandler[model.TaskOrder](logger, db),
+		svc:            service.NewBusinessService(logger, db),
 	}
 }
 
-func (h *TaskOrderHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
-	}
-	return h.db
-}
-
-// List 返回任务委托列表
 func (h *TaskOrderHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var items []model.TaskOrder
-	query := h.getDB(c).Order("id DESC")
-	if keyword := c.Query("keyword"); keyword != "" {
-		query = query.Where("order_no LIKE ? OR customer_name LIKE ? OR project_name LIKE ?",
-			"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
-	}
-	var total int64
-	if err := query.Model(&model.TaskOrder{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询任务委托失败: %v", err))
-		return
-	}
-	utils.SuccessPage(c, items, total, page, pageSize)
+	h.GenericHandler.List(c,
+		[]string{"order_no", "customer_name", "project_name"},
+		nil,
+	)
 }
 
-// Get 获取单个任务委托
 func (h *TaskOrderHandler) Get(c *gin.Context) {
-	id, err := parseUint(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "无效的ID")
-		return
-	}
-	var item model.TaskOrder
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
-		utils.NotFound(c, "任务委托不存在")
-		return
-	}
-	utils.Success(c, item)
+	h.GenericHandler.Get(c)
 }
 
 type CreateTaskOrderRequest struct {
@@ -96,7 +64,7 @@ func (h *TaskOrderHandler) Create(c *gin.Context) {
 		Status:       0, // 草稿
 		CreatedBy:    &userID,
 	}
-	if err := h.getDB(c).Create(&item).Error; err != nil {
+	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建任务委托失败: %v", err))
 		return
 	}
@@ -119,7 +87,7 @@ func (h *TaskOrderHandler) Update(c *gin.Context) {
 		return
 	}
 	var item model.TaskOrder
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "任务委托不存在")
 		return
 	}
@@ -148,11 +116,11 @@ func (h *TaskOrderHandler) Update(c *gin.Context) {
 	if req.TestItems != "" {
 		updates["test_items"] = req.TestItems
 	}
-	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新任务委托失败: %v", err))
 		return
 	}
-	h.getDB(c).First(&item, id)
+	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
 }
 
@@ -164,7 +132,7 @@ func (h *TaskOrderHandler) Delete(c *gin.Context) {
 		return
 	}
 	var item model.TaskOrder
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "任务委托不存在")
 		return
 	}
@@ -172,7 +140,7 @@ func (h *TaskOrderHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, "已提交的任务委托不可删除")
 		return
 	}
-	if err := h.getDB(c).Delete(&item).Error; err != nil {
+	if err := h.GetDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除任务委托失败: %v", err))
 		return
 	}
@@ -187,7 +155,7 @@ func (h *TaskOrderHandler) Submit(c *gin.Context) {
 		return
 	}
 	var item model.TaskOrder
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "任务委托不存在")
 		return
 	}
@@ -203,7 +171,7 @@ func (h *TaskOrderHandler) Submit(c *gin.Context) {
 		return
 	}
 	// 更新状态和流程实例ID
-	if err := h.getDB(c).Model(&item).Updates(map[string]interface{}{
+	if err := h.GetDB(c).Model(&item).Updates(map[string]interface{}{
 		"status":              1,
 		"process_instance_id": instanceID,
 	}).Error; err != nil {
@@ -246,6 +214,6 @@ func (h *NodeHandler) getDB(c *gin.Context) *gorm.DB {
 // ============================================================
 
 type ContractReviewHandler struct {
+	*GenericHandler[model.ContractReview]
 	svc *service.BusinessService
-	db  *gorm.DB
 }

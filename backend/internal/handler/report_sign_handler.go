@@ -18,49 +18,24 @@ import (
 
 func NewReportSignHandler(logger *zap.Logger, db *gorm.DB) *ReportSignHandler {
 	return &ReportSignHandler{
-		svc: service.NewBusinessService(logger, db),
-		db:  db,
+		GenericHandler: NewGenericHandler[model.ReportSign](logger, db),
+		svc:            service.NewBusinessService(logger, db),
 	}
 }
 
-func (h *ReportSignHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
-	}
-	return h.db
-}
+
 
 func (h *ReportSignHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var items []model.ReportSign
-	query := h.getDB(c).Order("id DESC")
-	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
-		query = query.Where("task_order_id = ?", taskOrderID)
-	}
-	var total int64
-	if err := query.Model(&model.ReportSign{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询报告签发失败: %v", err))
-		return
-	}
-	utils.SuccessPage(c, items, total, page, pageSize)
+	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		if id := c.Query("task_order_id"); id != "" {
+			db = db.Where("task_order_id = ?", id)
+		}
+		return db
+	})
 }
 
 func (h *ReportSignHandler) Get(c *gin.Context) {
-	id, err := parseUint(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "无效的ID")
-		return
-	}
-	var item model.ReportSign
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
-		utils.NotFound(c, "报告签发记录不存在")
-		return
-	}
-	utils.Success(c, item)
+	h.GenericHandler.Get(c)
 }
 
 func (h *ReportSignHandler) Create(c *gin.Context) {
@@ -84,7 +59,7 @@ func (h *ReportSignHandler) Create(c *gin.Context) {
 		SignDate:    req.SignDate,
 		SignStamp:   req.SignStamp,
 	}
-	if err := h.getDB(c).Create(&item).Error; err != nil {
+	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建报告签发失败: %v", err))
 		return
 	}
@@ -98,11 +73,11 @@ func (h *ReportSignHandler) Update(c *gin.Context) {
 		return
 	}
 	var item model.ReportSign
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "报告签发记录不存在")
 		return
 	}
-	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeReportSign); err != nil {
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeReportSign); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -133,11 +108,11 @@ func (h *ReportSignHandler) Update(c *gin.Context) {
 	if req.SignStamp != "" {
 		updates["sign_stamp"] = req.SignStamp
 	}
-	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新报告签发失败: %v", err))
 		return
 	}
-	h.getDB(c).First(&item, id)
+	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
 }
 
@@ -148,15 +123,15 @@ func (h *ReportSignHandler) Delete(c *gin.Context) {
 		return
 	}
 	var item model.ReportSign
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "报告签发记录不存在")
 		return
 	}
-	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.getDB(c).Delete(&item).Error; err != nil {
+	if err := h.GetDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除报告签发失败: %v", err))
 		return
 	}
@@ -198,7 +173,7 @@ func (h *ReportSignHandler) Approve(c *gin.Context) {
 	if req.SignResult != "" {
 		rec.SignResult = req.SignResult
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
@@ -211,7 +186,7 @@ func (h *ReportSignHandler) Approve(c *gin.Context) {
 // aggregateSignSlip 汇聚生成"报告审核签发单"（流程图 D15）所需数据：
 // 报告编号/标题（取自报告编制）、编制/复核/审核各环节意见、以及实验原始记录（data_entries）。
 func (h *ReportSignHandler) aggregateSignSlip(c *gin.Context, taskOrderID uint) (reportNo, reportTitle, prepareOpinion, reviewOpinion, auditOpinion, rawRecords string) {
-	db := h.getDB(c)
+	db := h.GetDB(c)
 
 	// 报告编制（D9）——报告编号、标题与编制意见
 	var prepare model.ReportPrepare
@@ -266,7 +241,7 @@ func (h *ReportSignHandler) Reject(c *gin.Context) {
 		SignResult:  "驳回",
 		SignComment: req.SignComment,
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.SignComment); err != nil {
@@ -281,6 +256,6 @@ func (h *ReportSignHandler) Reject(c *gin.Context) {
 // ============================================================
 
 type ReportPrintHandler struct {
+	*GenericHandler[model.ReportPrint]
 	svc *service.BusinessService
-	db  *gorm.DB
 }

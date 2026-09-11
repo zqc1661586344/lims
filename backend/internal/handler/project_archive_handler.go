@@ -18,49 +18,24 @@ import (
 
 func NewProjectArchiveHandler(logger *zap.Logger, db *gorm.DB) *ProjectArchiveHandler {
 	return &ProjectArchiveHandler{
-		svc: service.NewBusinessService(logger, db),
-		db:  db,
+		GenericHandler: NewGenericHandler[model.ProjectArchive](logger, db),
+		svc:            service.NewBusinessService(logger, db),
 	}
 }
 
-func (h *ProjectArchiveHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
-	}
-	return h.db
-}
+
 
 func (h *ProjectArchiveHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var items []model.ProjectArchive
-	query := h.getDB(c).Order("id DESC")
-	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
-		query = query.Where("task_order_id = ?", taskOrderID)
-	}
-	var total int64
-	if err := query.Model(&model.ProjectArchive{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询项目归档失败: %v", err))
-		return
-	}
-	utils.SuccessPage(c, items, total, page, pageSize)
+	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		if id := c.Query("task_order_id"); id != "" {
+			db = db.Where("task_order_id = ?", id)
+		}
+		return db
+	})
 }
 
 func (h *ProjectArchiveHandler) Get(c *gin.Context) {
-	id, err := parseUint(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "无效的ID")
-		return
-	}
-	var item model.ProjectArchive
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
-		utils.NotFound(c, "项目归档记录不存在")
-		return
-	}
-	utils.Success(c, item)
+	h.GenericHandler.Get(c)
 }
 
 func (h *ProjectArchiveHandler) Create(c *gin.Context) {
@@ -86,7 +61,7 @@ func (h *ProjectArchiveHandler) Create(c *gin.Context) {
 		ArchiveComment:  req.ArchiveComment,
 		RetentionPeriod: req.RetentionPeriod,
 	}
-	if err := h.getDB(c).Create(&item).Error; err != nil {
+	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建项目归档失败: %v", err))
 		return
 	}
@@ -100,11 +75,11 @@ func (h *ProjectArchiveHandler) Update(c *gin.Context) {
 		return
 	}
 	var item model.ProjectArchive
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "项目归档记录不存在")
 		return
 	}
-	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeProjectArchive); err != nil {
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeProjectArchive); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -139,11 +114,11 @@ func (h *ProjectArchiveHandler) Update(c *gin.Context) {
 	if req.RetentionPeriod > 0 {
 		updates["retention_period"] = req.RetentionPeriod
 	}
-	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新项目归档失败: %v", err))
 		return
 	}
-	h.getDB(c).First(&item, id)
+	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
 }
 
@@ -154,15 +129,15 @@ func (h *ProjectArchiveHandler) Delete(c *gin.Context) {
 		return
 	}
 	var item model.ProjectArchive
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "项目归档记录不存在")
 		return
 	}
-	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.getDB(c).Delete(&item).Error; err != nil {
+	if err := h.GetDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除项目归档失败: %v", err))
 		return
 	}
@@ -201,7 +176,7 @@ func (h *ProjectArchiveHandler) Approve(c *gin.Context) {
 	if rec.RetentionPeriod == 0 {
 		rec.RetentionPeriod = 36
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
@@ -214,7 +189,7 @@ func (h *ProjectArchiveHandler) Approve(c *gin.Context) {
 // aggregateArchiveFiles 自动汇聚该委托单 D1–D13 全部环节文档，生成归档文件清单（流程图 D14 = 以上所有文档）。
 // 返回 JSON 数组字符串：[{stage, doc_name, ref}]
 func (h *ProjectArchiveHandler) aggregateArchiveFiles(c *gin.Context, taskOrderID uint) string {
-	db := h.getDB(c)
+	db := h.GetDB(c)
 	type docItem struct {
 		Stage   string `json:"stage"`
 		DocName string `json:"doc_name"`
@@ -312,7 +287,7 @@ func (h *ProjectArchiveHandler) Reject(c *gin.Context) {
 		TaskOrderID:    req.TaskID,
 		ArchiveComment: req.ArchiveComment,
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ArchiveComment); err != nil {

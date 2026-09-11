@@ -15,52 +15,27 @@ import (
 
 func NewDataEntryHandler(logger *zap.Logger, db *gorm.DB) *DataEntryHandler {
 	return &DataEntryHandler{
-		svc: service.NewBusinessService(logger, db),
-		db:  db,
+		GenericHandler: NewGenericHandler[model.DataEntry](logger, db),
+		svc:            service.NewBusinessService(logger, db),
 	}
 }
 
-func (h *DataEntryHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
-	}
-	return h.db
-}
+
 
 func (h *DataEntryHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var items []model.DataEntry
-	query := h.getDB(c).Order("id DESC")
-	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
-		query = query.Where("task_order_id = ?", taskOrderID)
-	}
-	if testItemID := c.Query("test_item_id"); testItemID != "" {
-		query = query.Where("test_item_id = ?", testItemID)
-	}
-	var total int64
-	if err := query.Model(&model.DataEntry{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询数据录入失败: %v", err))
-		return
-	}
-	utils.SuccessPage(c, items, total, page, pageSize)
+	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		if id := c.Query("task_order_id"); id != "" {
+			db = db.Where("task_order_id = ?", id)
+		}
+		if id := c.Query("test_item_id"); id != "" {
+			db = db.Where("test_item_id = ?", id)
+		}
+		return db
+	})
 }
 
 func (h *DataEntryHandler) Get(c *gin.Context) {
-	id, err := parseUint(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "无效的ID")
-		return
-	}
-	var item model.DataEntry
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
-		utils.NotFound(c, "数据录入记录不存在")
-		return
-	}
-	utils.Success(c, item)
+	h.GenericHandler.Get(c)
 }
 
 func (h *DataEntryHandler) Create(c *gin.Context) {
@@ -80,7 +55,7 @@ func (h *DataEntryHandler) Create(c *gin.Context) {
 		OriginalData: req.OriginalData,
 		RawRecordID:  req.RawRecordID,
 	}
-	if err := h.getDB(c).Create(&item).Error; err != nil {
+	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建数据录入失败: %v", err))
 		return
 	}
@@ -94,11 +69,11 @@ func (h *DataEntryHandler) Update(c *gin.Context) {
 		return
 	}
 	var item model.DataEntry
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "数据录入记录不存在")
 		return
 	}
-	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeDataEntry); err != nil {
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeDataEntry); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -118,11 +93,11 @@ func (h *DataEntryHandler) Update(c *gin.Context) {
 	// Always update test_item_id and raw_record_id if set
 	updates["test_item_id"] = req.TestItemID
 	updates["raw_record_id"] = req.RawRecordID
-	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新数据录入失败: %v", err))
 		return
 	}
-	h.getDB(c).First(&item, id)
+	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
 }
 
@@ -133,15 +108,15 @@ func (h *DataEntryHandler) Delete(c *gin.Context) {
 		return
 	}
 	var item model.DataEntry
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "数据录入记录不存在")
 		return
 	}
-	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.getDB(c).Delete(&item).Error; err != nil {
+	if err := h.GetDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除数据录入失败: %v", err))
 		return
 	}
@@ -160,7 +135,7 @@ func (h *DataEntryHandler) Approve(c *gin.Context) {
 	}
 	// 检查是否有至少一条数据录入记录
 	var count int64
-	h.getDB(c).Model(&model.DataEntry{}).Where("task_order_id = ?", req.TaskID).Count(&count)
+	h.GetDB(c).Model(&model.DataEntry{}).Where("task_order_id = ?", req.TaskID).Count(&count)
 	if count == 0 {
 		utils.BadRequest(c, "请先录入数据")
 		return
@@ -196,6 +171,6 @@ func (h *DataEntryHandler) Reject(c *gin.Context) {
 // ============================================================
 
 type DataReviewHandler struct {
+	*GenericHandler[model.DataReview]
 	svc *service.BusinessService
-	db  *gorm.DB
 }

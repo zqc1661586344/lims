@@ -16,49 +16,24 @@ import (
 
 func NewReportPrepareHandler(logger *zap.Logger, db *gorm.DB) *ReportPrepareHandler {
 	return &ReportPrepareHandler{
-		svc: service.NewBusinessService(logger, db),
-		db:  db,
+		GenericHandler: NewGenericHandler[model.ReportPrepare](logger, db),
+		svc:            service.NewBusinessService(logger, db),
 	}
 }
 
-func (h *ReportPrepareHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
-	}
-	return h.db
-}
+
 
 func (h *ReportPrepareHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var items []model.ReportPrepare
-	query := h.getDB(c).Order("id DESC")
-	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
-		query = query.Where("task_order_id = ?", taskOrderID)
-	}
-	var total int64
-	if err := query.Model(&model.ReportPrepare{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询报告编制失败: %v", err))
-		return
-	}
-	utils.SuccessPage(c, items, total, page, pageSize)
+	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		if id := c.Query("task_order_id"); id != "" {
+			db = db.Where("task_order_id = ?", id)
+		}
+		return db
+	})
 }
 
 func (h *ReportPrepareHandler) Get(c *gin.Context) {
-	id, err := parseUint(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "无效的ID")
-		return
-	}
-	var item model.ReportPrepare
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
-		utils.NotFound(c, "报告编制记录不存在")
-		return
-	}
-	utils.Success(c, item)
+	h.GenericHandler.Get(c)
 }
 
 func (h *ReportPrepareHandler) Create(c *gin.Context) {
@@ -80,7 +55,7 @@ func (h *ReportPrepareHandler) Create(c *gin.Context) {
 		ReportFile:    req.ReportFile,
 		Attachments:   req.Attachments,
 	}
-	if err := h.getDB(c).Create(&item).Error; err != nil {
+	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建报告编制失败: %v", err))
 		return
 	}
@@ -94,11 +69,11 @@ func (h *ReportPrepareHandler) Update(c *gin.Context) {
 		return
 	}
 	var item model.ReportPrepare
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "报告编制记录不存在")
 		return
 	}
-	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeReportPrepare); err != nil {
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeReportPrepare); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -125,11 +100,11 @@ func (h *ReportPrepareHandler) Update(c *gin.Context) {
 	if req.Attachments != "" {
 		updates["attachments"] = req.Attachments
 	}
-	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新报告编制失败: %v", err))
 		return
 	}
-	h.getDB(c).First(&item, id)
+	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
 }
 
@@ -140,15 +115,15 @@ func (h *ReportPrepareHandler) Delete(c *gin.Context) {
 		return
 	}
 	var item model.ReportPrepare
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "报告编制记录不存在")
 		return
 	}
-	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.getDB(c).Delete(&item).Error; err != nil {
+	if err := h.GetDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除报告编制失败: %v", err))
 		return
 	}
@@ -179,7 +154,7 @@ func (h *ReportPrepareHandler) Approve(c *gin.Context) {
 		ReportFile:     req.ReportFile,
 		Attachments:    req.Attachments,
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
@@ -201,7 +176,7 @@ func (h *ReportPrepareHandler) Reject(c *gin.Context) {
 	rec := model.ReportPrepare{
 		TaskOrderID: req.TaskID,
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
@@ -216,6 +191,6 @@ func (h *ReportPrepareHandler) Reject(c *gin.Context) {
 // ============================================================
 
 type ReportReviewHandler struct {
+	*GenericHandler[model.ReportReview]
 	svc *service.BusinessService
-	db  *gorm.DB
 }

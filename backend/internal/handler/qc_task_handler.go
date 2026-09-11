@@ -16,49 +16,24 @@ import (
 
 func NewQCTaskHandler(logger *zap.Logger, db *gorm.DB) *QCTaskHandler {
 	return &QCTaskHandler{
-		svc: service.NewBusinessService(logger, db),
-		db:  db,
+		GenericHandler: NewGenericHandler[model.QCTask](logger, db),
+		svc:            service.NewBusinessService(logger, db),
 	}
 }
 
-func (h *QCTaskHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
-	}
-	return h.db
-}
+
 
 func (h *QCTaskHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var items []model.QCTask
-	query := h.getDB(c).Order("id DESC")
-	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
-		query = query.Where("task_order_id = ?", taskOrderID)
-	}
-	var total int64
-	if err := query.Model(&model.QCTask{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询质控任务失败: %v", err))
-		return
-	}
-	utils.SuccessPage(c, items, total, page, pageSize)
+	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		if id := c.Query("task_order_id"); id != "" {
+			db = db.Where("task_order_id = ?", id)
+		}
+		return db
+	})
 }
 
 func (h *QCTaskHandler) Get(c *gin.Context) {
-	id, err := parseUint(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "无效的ID")
-		return
-	}
-	var item model.QCTask
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
-		utils.NotFound(c, "质控任务不存在")
-		return
-	}
-	utils.Success(c, item)
+	h.GenericHandler.Get(c)
 }
 
 func (h *QCTaskHandler) Create(c *gin.Context) {
@@ -76,7 +51,7 @@ func (h *QCTaskHandler) Create(c *gin.Context) {
 		QCType:      req.QCType,
 		QCDetails:   req.QCDetails,
 	}
-	if err := h.getDB(c).Create(&item).Error; err != nil {
+	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建质控任务失败: %v", err))
 		return
 	}
@@ -90,11 +65,11 @@ func (h *QCTaskHandler) Update(c *gin.Context) {
 		return
 	}
 	var item model.QCTask
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "质控任务不存在")
 		return
 	}
-	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeQCTask); err != nil {
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeQCTask); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -113,11 +88,11 @@ func (h *QCTaskHandler) Update(c *gin.Context) {
 	if req.QCDetails != "" {
 		updates["qc_details"] = req.QCDetails
 	}
-	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新质控任务失败: %v", err))
 		return
 	}
-	h.getDB(c).First(&item, id)
+	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
 }
 
@@ -128,15 +103,15 @@ func (h *QCTaskHandler) Delete(c *gin.Context) {
 		return
 	}
 	var item model.QCTask
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "质控任务不存在")
 		return
 	}
-	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.getDB(c).Delete(&item).Error; err != nil {
+	if err := h.GetDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除质控任务失败: %v", err))
 		return
 	}
@@ -159,7 +134,7 @@ func (h *QCTaskHandler) Approve(c *gin.Context) {
 		QCType:      req.QCType,
 		QCDetails:   req.QCDetails,
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
@@ -181,7 +156,7 @@ func (h *QCTaskHandler) Reject(c *gin.Context) {
 	qc := model.QCTask{
 		TaskOrderID: req.TaskID,
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
@@ -196,6 +171,6 @@ func (h *QCTaskHandler) Reject(c *gin.Context) {
 // ============================================================
 
 type SamplingScheduleHandler struct {
+	*GenericHandler[model.SamplingSchedule]
 	svc *service.BusinessService
-	db  *gorm.DB
 }

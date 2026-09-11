@@ -15,51 +15,26 @@ import (
 
 func NewContractReviewHandler(logger *zap.Logger, db *gorm.DB) *ContractReviewHandler {
 	return &ContractReviewHandler{
-		svc: service.NewBusinessService(logger, db),
-		db:  db,
+		GenericHandler: NewGenericHandler[model.ContractReview](logger, db),
+		svc:            service.NewBusinessService(logger, db),
 	}
 }
 
-func (h *ContractReviewHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
-	}
-	return h.db
-}
+
 
 // List 返回合同评审列表
 func (h *ContractReviewHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var items []model.ContractReview
-	query := h.getDB(c).Order("id DESC")
-	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
-		query = query.Where("task_order_id = ?", taskOrderID)
-	}
-	var total int64
-	if err := query.Model(&model.ContractReview{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询合同评审失败: %v", err))
-		return
-	}
-	utils.SuccessPage(c, items, total, page, pageSize)
+	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		if id := c.Query("task_order_id"); id != "" {
+			db = db.Where("task_order_id = ?", id)
+		}
+		return db
+	})
 }
 
 // Get 获取单个合同评审
 func (h *ContractReviewHandler) Get(c *gin.Context) {
-	id, err := parseUint(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "无效的ID")
-		return
-	}
-	var item model.ContractReview
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
-		utils.NotFound(c, "合同评审记录不存在")
-		return
-	}
-	utils.Success(c, item)
+	h.GenericHandler.Get(c)
 }
 
 type SaveContractReviewRequest struct {
@@ -82,7 +57,7 @@ func (h *ContractReviewHandler) Create(c *gin.Context) {
 		ReviewComment:    req.ReviewComment,
 		ContractFilePath: req.ContractFilePath,
 	}
-	if err := h.getDB(c).Create(&item).Error; err != nil {
+	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建合同评审失败: %v", err))
 		return
 	}
@@ -97,11 +72,11 @@ func (h *ContractReviewHandler) Update(c *gin.Context) {
 		return
 	}
 	var item model.ContractReview
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "合同评审记录不存在")
 		return
 	}
-	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeContractReview); err != nil {
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeContractReview); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -120,11 +95,11 @@ func (h *ContractReviewHandler) Update(c *gin.Context) {
 	if req.ContractFilePath != "" {
 		updates["contract_file_path"] = req.ContractFilePath
 	}
-	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新合同评审失败: %v", err))
 		return
 	}
-	h.getDB(c).First(&item, id)
+	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
 }
 
@@ -136,15 +111,15 @@ func (h *ContractReviewHandler) Delete(c *gin.Context) {
 		return
 	}
 	var item model.ContractReview
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "合同评审记录不存在")
 		return
 	}
-	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.getDB(c).Delete(&item).Error; err != nil {
+	if err := h.GetDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除合同评审失败: %v", err))
 		return
 	}
@@ -173,7 +148,7 @@ func (h *ContractReviewHandler) Approve(c *gin.Context) {
 	if req.ReviewResult != "" {
 		review.ReviewResult = req.ReviewResult
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ReviewComment); err != nil {
@@ -199,7 +174,7 @@ func (h *ContractReviewHandler) Reject(c *gin.Context) {
 		ReviewResult:  "驳回",
 		ReviewComment: req.ReviewComment,
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ReviewComment); err != nil {
@@ -214,6 +189,6 @@ func (h *ContractReviewHandler) Reject(c *gin.Context) {
 // ============================================================
 
 type QCTaskHandler struct {
+	*GenericHandler[model.QCTask]
 	svc *service.BusinessService
-	db  *gorm.DB
 }

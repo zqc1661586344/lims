@@ -94,7 +94,7 @@ async function loadData() {
     const list: DataEntryRow[] = (res.data?.items ?? res.data) || []
 
     const labSheetRes = await listLabSheets({ node_code: 'node_data_entry' })
-    const labSheets: LabSheet[] = labSheetRes.data || []
+    const labSheets: LabSheet[] = (labSheetRes.data?.items ?? labSheetRes.data) || []
     const sheetMap = new Map<number, LabSheet>()
     for (const ls of labSheets) sheetMap.set(ls.task_order_id, ls)
 

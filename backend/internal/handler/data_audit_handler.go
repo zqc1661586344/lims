@@ -15,49 +15,24 @@ import (
 
 func NewDataAuditHandler(logger *zap.Logger, db *gorm.DB) *DataAuditHandler {
 	return &DataAuditHandler{
-		svc: service.NewBusinessService(logger, db),
-		db:  db,
+		GenericHandler: NewGenericHandler[model.DataAudit](logger, db),
+		svc:            service.NewBusinessService(logger, db),
 	}
 }
 
-func (h *DataAuditHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
-	}
-	return h.db
-}
+
 
 func (h *DataAuditHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var items []model.DataAudit
-	query := h.getDB(c).Order("id DESC")
-	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
-		query = query.Where("task_order_id = ?", taskOrderID)
-	}
-	var total int64
-	if err := query.Model(&model.DataAudit{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("查询数据审核失败: %v", err))
-		return
-	}
-	utils.SuccessPage(c, items, total, page, pageSize)
+	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		if id := c.Query("task_order_id"); id != "" {
+			db = db.Where("task_order_id = ?", id)
+		}
+		return db
+	})
 }
 
 func (h *DataAuditHandler) Get(c *gin.Context) {
-	id, err := parseUint(c.Param("id"))
-	if err != nil {
-		utils.BadRequest(c, "无效的ID")
-		return
-	}
-	var item model.DataAudit
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
-		utils.NotFound(c, "数据审核记录不存在")
-		return
-	}
-	utils.Success(c, item)
+	h.GenericHandler.Get(c)
 }
 
 func (h *DataAuditHandler) Create(c *gin.Context) {
@@ -77,7 +52,7 @@ func (h *DataAuditHandler) Create(c *gin.Context) {
 		AuditComment: req.AuditComment,
 		IssueList:    req.IssueList,
 	}
-	if err := h.getDB(c).Create(&item).Error; err != nil {
+	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建数据审核失败: %v", err))
 		return
 	}
@@ -91,11 +66,11 @@ func (h *DataAuditHandler) Update(c *gin.Context) {
 		return
 	}
 	var item model.DataAudit
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "数据审核记录不存在")
 		return
 	}
-	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeDataAudit); err != nil {
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeDataAudit); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
@@ -118,11 +93,11 @@ func (h *DataAuditHandler) Update(c *gin.Context) {
 	if req.IssueList != "" {
 		updates["issue_list"] = req.IssueList
 	}
-	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新数据审核失败: %v", err))
 		return
 	}
-	h.getDB(c).First(&item, id)
+	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
 }
 
@@ -133,15 +108,15 @@ func (h *DataAuditHandler) Delete(c *gin.Context) {
 		return
 	}
 	var item model.DataAudit
-	if err := h.getDB(c).First(&item, id).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "数据审核记录不存在")
 		return
 	}
-	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.getDB(c).Delete(&item).Error; err != nil {
+	if err := h.GetDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除数据审核失败: %v", err))
 		return
 	}
@@ -169,7 +144,7 @@ func (h *DataAuditHandler) Approve(c *gin.Context) {
 	if req.AuditResult != "" {
 		audit.AuditResult = req.AuditResult
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(audit).FirstOrCreate(&audit)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(audit).FirstOrCreate(&audit)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
@@ -193,7 +168,7 @@ func (h *DataAuditHandler) Reject(c *gin.Context) {
 		AuditResult:  "驳回",
 		AuditComment: req.AuditComment,
 	}
-	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(audit).FirstOrCreate(&audit)
+	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(audit).FirstOrCreate(&audit)
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.AuditComment); err != nil {
@@ -208,6 +183,6 @@ func (h *DataAuditHandler) Reject(c *gin.Context) {
 // ============================================================
 
 type ReportPrepareHandler struct {
+	*GenericHandler[model.ReportPrepare]
 	svc *service.BusinessService
-	db  *gorm.DB
 }

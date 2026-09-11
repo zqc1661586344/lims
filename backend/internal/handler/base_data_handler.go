@@ -2,7 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
 	"lims-backend/internal/utils"
 	"time"
@@ -16,50 +15,34 @@ import (
 // ------------------------------------------------------------
 
 type TestItemHandler struct {
-	db *gorm.DB
+	*GenericHandler[model.TestItem]
 }
 
 func NewTestItemHandler(db *gorm.DB) *TestItemHandler {
-	return &TestItemHandler{db: db}
-}
-
-func (h *TestItemHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
+	return &TestItemHandler{
+		GenericHandler: NewGenericHandler[model.TestItem](nil, db),
 	}
-	return h.db
 }
 
 func (h *TestItemHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var items []model.TestItem
-	query := h.getDB(c).Preload("Standard")
-
-	if keyword := c.Query("keyword"); keyword != "" {
-		query = query.Where("name LIKE ? OR code LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
-	}
-	if cat := c.Query("category"); cat != "" {
-		query = query.Where("category = ?", cat)
-	}
-	var total int64
-	if err := query.Model(&model.TestItem{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
-		utils.InternalError(c, "查询检测项目失败")
-		return
-	}
-	utils.SuccessPage(c, items, total, page, pageSize)
+	h.GenericHandler.List(c,
+		[]string{"name", "code"},
+		func(db *gorm.DB, c *gin.Context) *gorm.DB {
+			db = db.Preload("Standard")
+			if cat := c.Query("category"); cat != "" {
+				db = db.Where("category = ?", cat)
+			}
+			return db
+		},
+	)
 }
 
 func (h *TestItemHandler) Get(c *gin.Context) {
-	var item model.TestItem
-	if err := h.getDB(c).Preload("Standard").First(&item, c.Param("id")).Error; err != nil {
-		utils.NotFound(c, "检测项目不存在")
-		return
-	}
-	utils.Success(c, item)
+	h.GenericHandler.Get(c, "Standard")
+}
+
+func (h *TestItemHandler) Delete(c *gin.Context) {
+	h.GenericHandler.Delete(c)
 }
 
 type CreateTestItemRequest struct {
@@ -94,7 +77,7 @@ func (h *TestItemHandler) Create(c *gin.Context) {
 		item.Status = 1
 	}
 
-	if err := h.getDB(c).Create(&item).Error; err != nil {
+	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, "创建检测项目失败")
 		return
 	}
@@ -113,8 +96,13 @@ type UpdateTestItemRequest struct {
 }
 
 func (h *TestItemHandler) Update(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
 	var item model.TestItem
-	if err := h.getDB(c).First(&item, c.Param("id")).Error; err != nil {
+	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "检测项目不存在")
 		return
 	}
@@ -151,19 +139,11 @@ func (h *TestItemHandler) Update(c *gin.Context) {
 		updates["status"] = *req.Status
 	}
 
-	if err := h.getDB(c).Model(&item).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新检测项目失败")
 		return
 	}
 	utils.Success(c, item)
-}
-
-func (h *TestItemHandler) Delete(c *gin.Context) {
-	if err := h.getDB(c).Delete(&model.TestItem{}, c.Param("id")).Error; err != nil {
-		utils.InternalError(c, "删除检测项目失败")
-		return
-	}
-	utils.Success(c, nil)
 }
 
 // ------------------------------------------------------------
@@ -171,47 +151,25 @@ func (h *TestItemHandler) Delete(c *gin.Context) {
 // ------------------------------------------------------------
 
 type TestStandardHandler struct {
-	db *gorm.DB
+	*GenericHandler[model.TestStandard]
 }
 
 func NewTestStandardHandler(db *gorm.DB) *TestStandardHandler {
-	return &TestStandardHandler{db: db}
-}
-
-func (h *TestStandardHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
+	return &TestStandardHandler{
+		GenericHandler: NewGenericHandler[model.TestStandard](nil, db),
 	}
-	return h.db
 }
 
 func (h *TestStandardHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var standards []model.TestStandard
-	query := h.getDB(c)
-
-	if keyword := c.Query("keyword"); keyword != "" {
-		query = query.Where("name LIKE ? OR code LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
-	}
-	var total int64
-	if err := query.Model(&model.TestStandard{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&standards).Error; err != nil {
-		utils.InternalError(c, "查询检测标准失败")
-		return
-	}
-	utils.SuccessPage(c, standards, total, page, pageSize)
+	h.GenericHandler.List(c, []string{"name", "code"}, nil)
 }
 
 func (h *TestStandardHandler) Get(c *gin.Context) {
-	var std model.TestStandard
-	if err := h.getDB(c).First(&std, c.Param("id")).Error; err != nil {
-		utils.NotFound(c, "检测标准不存在")
-		return
-	}
-	utils.Success(c, std)
+	h.GenericHandler.Get(c)
+}
+
+func (h *TestStandardHandler) Delete(c *gin.Context) {
+	h.GenericHandler.Delete(c)
 }
 
 type CreateTestStandardRequest struct {
@@ -251,7 +209,7 @@ func (h *TestStandardHandler) Create(c *gin.Context) {
 		std.PublishDate = parsed
 	}
 
-	if err := h.getDB(c).Create(&std).Error; err != nil {
+	if err := h.GetDB(c).Create(&std).Error; err != nil {
 		utils.InternalError(c, "创建检测标准失败")
 		return
 	}
@@ -269,8 +227,13 @@ type UpdateTestStandardRequest struct {
 }
 
 func (h *TestStandardHandler) Update(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
 	var std model.TestStandard
-	if err := h.getDB(c).First(&std, c.Param("id")).Error; err != nil {
+	if err := h.GetDB(c).First(&std, id).Error; err != nil {
 		utils.NotFound(c, "检测标准不存在")
 		return
 	}
@@ -309,19 +272,11 @@ func (h *TestStandardHandler) Update(c *gin.Context) {
 		updates["status"] = *req.Status
 	}
 
-	if err := h.getDB(c).Model(&std).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&std).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新检测标准失败")
 		return
 	}
 	utils.Success(c, std)
-}
-
-func (h *TestStandardHandler) Delete(c *gin.Context) {
-	if err := h.getDB(c).Delete(&model.TestStandard{}, c.Param("id")).Error; err != nil {
-		utils.InternalError(c, "删除检测标准失败")
-		return
-	}
-	utils.Success(c, nil)
 }
 
 // ------------------------------------------------------------
@@ -329,47 +284,25 @@ func (h *TestStandardHandler) Delete(c *gin.Context) {
 // ------------------------------------------------------------
 
 type EquipmentHandler struct {
-	db *gorm.DB
+	*GenericHandler[model.Equipment]
 }
 
 func NewEquipmentHandler(db *gorm.DB) *EquipmentHandler {
-	return &EquipmentHandler{db: db}
-}
-
-func (h *EquipmentHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
+	return &EquipmentHandler{
+		GenericHandler: NewGenericHandler[model.Equipment](nil, db),
 	}
-	return h.db
 }
 
 func (h *EquipmentHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var equipments []model.Equipment
-	query := h.getDB(c)
-
-	if keyword := c.Query("keyword"); keyword != "" {
-		query = query.Where("name LIKE ? OR code LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
-	}
-	var total int64
-	if err := query.Model(&model.Equipment{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&equipments).Error; err != nil {
-		utils.InternalError(c, "查询设备失败")
-		return
-	}
-	utils.SuccessPage(c, equipments, total, page, pageSize)
+	h.GenericHandler.List(c, []string{"name", "code"}, nil)
 }
 
 func (h *EquipmentHandler) Get(c *gin.Context) {
-	var equip model.Equipment
-	if err := h.getDB(c).First(&equip, c.Param("id")).Error; err != nil {
-		utils.NotFound(c, "设备不存在")
-		return
-	}
-	utils.Success(c, equip)
+	h.GenericHandler.Get(c)
+}
+
+func (h *EquipmentHandler) Delete(c *gin.Context) {
+	h.GenericHandler.Delete(c)
 }
 
 type CreateEquipmentRequest struct {
@@ -416,7 +349,7 @@ func (h *EquipmentHandler) Create(c *gin.Context) {
 		equip.NextCalDate = parsed
 	}
 
-	if err := h.getDB(c).Create(&equip).Error; err != nil {
+	if err := h.GetDB(c).Create(&equip).Error; err != nil {
 		utils.InternalError(c, "创建设备失败")
 		return
 	}
@@ -434,8 +367,13 @@ type UpdateEquipmentRequest struct {
 }
 
 func (h *EquipmentHandler) Update(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
 	var equip model.Equipment
-	if err := h.getDB(c).First(&equip, c.Param("id")).Error; err != nil {
+	if err := h.GetDB(c).First(&equip, id).Error; err != nil {
 		utils.NotFound(c, "设备不存在")
 		return
 	}
@@ -479,19 +417,11 @@ func (h *EquipmentHandler) Update(c *gin.Context) {
 		updates["status"] = *req.Status
 	}
 
-	if err := h.getDB(c).Model(&equip).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&equip).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新设备失败")
 		return
 	}
 	utils.Success(c, equip)
-}
-
-func (h *EquipmentHandler) Delete(c *gin.Context) {
-	if err := h.getDB(c).Delete(&model.Equipment{}, c.Param("id")).Error; err != nil {
-		utils.InternalError(c, "删除设备失败")
-		return
-	}
-	utils.Success(c, nil)
 }
 
 // ------------------------------------------------------------
@@ -499,47 +429,25 @@ func (h *EquipmentHandler) Delete(c *gin.Context) {
 // ------------------------------------------------------------
 
 type ReagentHandler struct {
-	db *gorm.DB
+	*GenericHandler[model.Reagent]
 }
 
 func NewReagentHandler(db *gorm.DB) *ReagentHandler {
-	return &ReagentHandler{db: db}
-}
-
-func (h *ReagentHandler) getDB(c *gin.Context) *gorm.DB {
-	if db := middleware.GetDB(c); db != nil {
-		return db
+	return &ReagentHandler{
+		GenericHandler: NewGenericHandler[model.Reagent](nil, db),
 	}
-	return h.db
 }
 
 func (h *ReagentHandler) List(c *gin.Context) {
-	page, pageSize, offset := utils.GetPagination(c)
-	var reagents []model.Reagent
-	query := h.getDB(c)
-
-	if keyword := c.Query("keyword"); keyword != "" {
-		query = query.Where("name LIKE ? OR code LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
-	}
-	var total int64
-	if err := query.Model(&model.Reagent{}).Count(&total).Error; err != nil {
-		utils.InternalError(c, "查询失败")
-		return
-	}
-	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&reagents).Error; err != nil {
-		utils.InternalError(c, "查询试剂失败")
-		return
-	}
-	utils.SuccessPage(c, reagents, total, page, pageSize)
+	h.GenericHandler.List(c, []string{"name", "code"}, nil)
 }
 
 func (h *ReagentHandler) Get(c *gin.Context) {
-	var reagent model.Reagent
-	if err := h.getDB(c).First(&reagent, c.Param("id")).Error; err != nil {
-		utils.NotFound(c, "试剂不存在")
-		return
-	}
-	utils.Success(c, reagent)
+	h.GenericHandler.Get(c)
+}
+
+func (h *ReagentHandler) Delete(c *gin.Context) {
+	h.GenericHandler.Delete(c)
 }
 
 type CreateReagentRequest struct {
@@ -583,7 +491,7 @@ func (h *ReagentHandler) Create(c *gin.Context) {
 		reagent.ExpireDate = parsed
 	}
 
-	if err := h.getDB(c).Create(&reagent).Error; err != nil {
+	if err := h.GetDB(c).Create(&reagent).Error; err != nil {
 		utils.InternalError(c, "创建试剂失败")
 		return
 	}
@@ -603,8 +511,13 @@ type UpdateReagentRequest struct {
 }
 
 func (h *ReagentHandler) Update(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
 	var reagent model.Reagent
-	if err := h.getDB(c).First(&reagent, c.Param("id")).Error; err != nil {
+	if err := h.GetDB(c).First(&reagent, id).Error; err != nil {
 		utils.NotFound(c, "试剂不存在")
 		return
 	}
@@ -649,26 +562,17 @@ func (h *ReagentHandler) Update(c *gin.Context) {
 		updates["status"] = *req.Status
 	}
 
-	if err := h.getDB(c).Model(&reagent).Updates(updates).Error; err != nil {
+	if err := h.GetDB(c).Model(&reagent).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新试剂失败")
 		return
 	}
 	utils.Success(c, reagent)
 }
 
-func (h *ReagentHandler) Delete(c *gin.Context) {
-	if err := h.getDB(c).Delete(&model.Reagent{}, c.Param("id")).Error; err != nil {
-		utils.InternalError(c, "删除试剂失败")
-		return
-	}
-	utils.Success(c, nil)
-}
-
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
 
-// parseDate attempts to parse a date string in multiple formats.
 func parseDate(s string) (time.Time, error) {
 	formats := []string{
 		"2006-01-02",

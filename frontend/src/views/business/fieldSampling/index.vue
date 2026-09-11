@@ -96,7 +96,7 @@ async function loadData() {
     const list: FieldSamplingRow[] = (res.data?.items ?? res.data) || []
 
     const sheetRes = await listSamplingSheets({ node_code: 'node_field_sampling' })
-    const sheets: SamplingSheet[] = sheetRes.data || []
+    const sheets: SamplingSheet[] = (sheetRes.data?.items ?? sheetRes.data) || []
     const sheetMap = new Map<number, SamplingSheet>()
     for (const s of sheets) sheetMap.set(s.task_order_id, s)
 
