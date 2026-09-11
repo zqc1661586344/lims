@@ -42,6 +42,16 @@ var (
 	ErrOptimisticLock = errors.New("optimistic lock conflict — please retry")
 )
 
+// sodCheckNodes maps nodes that enforce Segregation of Duties (CNAS
+// requirement: reviewer != performer) to their immediately-preceding
+// node whose assignee must differ from the current operator.
+var sodCheckNodes = map[string]string{
+	NodeDataReview:   NodeDataEntry,
+	NodeDataAudit:    NodeDataReview,
+	NodeReportReview: NodeReportPrepare,
+	NodeReportAudit:  NodeReportReview,
+}
+
 // NewEngine creates a new workflow engine with the given GORM DB.
 func NewEngine(db *gorm.DB) *Engine {
 	defs := GetDefinition()
@@ -107,6 +117,9 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDe
 	}
 	if task.AssigneeDeptID != userDeptID {
 		return ErrDeptNotMatch
+	}
+	if err := e.checkSoD(tx, task.ProcessInstanceID, task.NodeCode, userID); err != nil {
+		return err
 	}
 
 	var instance struct {
@@ -187,6 +200,9 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDep
 	}
 	if task.AssigneeDeptID != userDeptID {
 		return ErrDeptNotMatch
+	}
+	if err := e.checkSoD(tx, task.ProcessInstanceID, task.NodeCode, userID); err != nil {
+		return err
 	}
 
 	nodeDef, ok := e.nodeMap[task.NodeCode]
@@ -541,6 +557,24 @@ func (e *Engine) getTaskForUpdate(tx *gorm.DB, taskID uint) (*taskRow, error) {
 		return nil, fmt.Errorf("task not found: %d", taskID)
 	}
 	return &row, nil
+}
+
+func (e *Engine) checkSoD(tx *gorm.DB, instanceID uint, nodeCode string, userID uint) error {
+	prevNode, ok := sodCheckNodes[nodeCode]
+	if !ok {
+		return nil
+	}
+
+	var prevAssignee *uint
+	if err := tx.Raw(`SELECT assignee_user_id FROM process_tasks
+		WHERE process_instance_id = ? AND node_code = ? AND status = 'completed'
+		ORDER BY id DESC LIMIT 1`, instanceID, prevNode).Scan(&prevAssignee).Error; err != nil {
+		return fmt.Errorf("sod check: %w", err)
+	}
+	if prevAssignee != nil && *prevAssignee == userID {
+		return ErrSoDViolation
+	}
+	return nil
 }
 
 func (e *Engine) createTask(instanceID uint, nodeCode, nodeName string, deptID uint, assigneeUserID ...uint) error {

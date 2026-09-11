@@ -12,4 +12,5 @@ var (
 	ErrVersionConflict           = errors.New("version conflict, retry later")
 	ErrDeptNotMatch              = errors.New("current user's department does not match the task's responsible department")
 	ErrTaskAlreadyApproved       = errors.New("this node's business record can no longer be modified after workflow has advanced")
+	ErrSoDViolation              = errors.New("segregation of duties violation — operator cannot review their own work at this node")
 )

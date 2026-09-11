@@ -199,18 +199,12 @@ func extractOperator(db *gorm.DB) (uint, string) {
 		return 0, "system"
 	}
 
-	type ctxKey string
-	const (
-		keyUserID   ctxKey = "user_id"
-		keyUsername ctxKey = "username"
-	)
-
-	uid, ok := db.Statement.Context.Value(keyUserID).(uint)
-	if !ok {
+	uid, ok := db.Statement.Context.Value(CtxUserID).(uint)
+	if !ok || uid == 0 {
 		return 0, "system"
 	}
 
-	uname, _ := db.Statement.Context.Value(keyUsername).(string)
+	uname, _ := db.Statement.Context.Value(CtxUsername).(string)
 	return uid, uname
 }
 

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"strings"
 
 	"lims-backend/internal/config"
@@ -81,6 +82,22 @@ func IsAdmin(c *gin.Context) bool {
 		return false
 	}
 	return admin.(bool)
+}
+
+// RequireAdmin returns a middleware that enforces the caller to be an admin user.
+// It must be placed after AuthMiddleware so that user info is available in context.
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !IsAdmin(c) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":    403,
+				"message": "需要管理员权限才能执行此操作",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 // GetPermissions extracts the permission codes from the Gin context.

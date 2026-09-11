@@ -10,8 +10,8 @@ import (
 type ctxKey string
 
 const (
-	ctxUserID   ctxKey = "user_id"
-	ctxUsername ctxKey = "username"
+	CtxUserID   ctxKey = "user_id"
+	CtxUsername ctxKey = "username"
 )
 
 // GormContextMiddleware propagates Gin context values (user_id, username)
@@ -24,8 +24,8 @@ func GormContextMiddleware(db *gorm.DB) gin.HandlerFunc {
 		uid, _ := userID.(uint)
 		uname, _ := username.(string)
 
-		ctx := context.WithValue(c.Request.Context(), ctxUserID, uid)
-		ctx = context.WithValue(ctx, ctxUsername, uname)
+		ctx := context.WithValue(c.Request.Context(), CtxUserID, uid)
+		ctx = context.WithValue(ctx, CtxUsername, uname)
 
 		// Replace the request context and store a contextualized DB in Gin.
 		c.Request = c.Request.WithContext(ctx)

@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/service"
 	"lims-backend/internal/utils"
+	"lims-backend/internal/workflow"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -124,7 +127,7 @@ func (h *WorkflowHandler) ApproveTask(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTask(id, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+		h.handleWorkflowError(c, err, "审批失败")
 		return
 	}
 	utils.Success(c, nil)
@@ -151,10 +154,30 @@ func (h *WorkflowHandler) RejectTask(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.RejectTask(id, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+		h.handleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, nil)
+}
+
+// handleWorkflowError maps workflow engine sentinel errors to the correct
+// HTTP status code so the frontend can distinguish authz (403), conflict
+// (409), bad request (400), and server errors (500).
+func (h *WorkflowHandler) handleWorkflowError(c *gin.Context, err error, action string) {
+	switch {
+	case errors.Is(err, workflow.ErrDeptNotMatch):
+		utils.Forbidden(c, fmt.Sprintf("%s: 当前用户部门无权操作该任务", action))
+	case errors.Is(err, workflow.ErrSoDViolation):
+		utils.Forbidden(c, fmt.Sprintf("%s: 职责分离违规——审核/复核人不能是前序节点的操作人", action))
+	case errors.Is(err, workflow.ErrOptimisticLock):
+		utils.Error(c, http.StatusConflict, fmt.Sprintf("%s: 数据已被他人修改，请刷新后重试", action))
+	case errors.Is(err, workflow.ErrTaskAlreadyCompleted):
+		utils.BadRequest(c, fmt.Sprintf("%s: 任务已完成或已驳回", action))
+	case errors.Is(err, workflow.ErrInstanceNotRunning):
+		utils.BadRequest(c, fmt.Sprintf("%s: 流程实例已终止", action))
+	default:
+		utils.InternalError(c, fmt.Sprintf("%s: %v", action, err))
+	}
 }
 
 // GetNodeDefinitions returns all workflow node definitions.

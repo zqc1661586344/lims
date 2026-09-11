@@ -40,6 +40,7 @@ func RegisterSystemRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 
 	systemGroup := r.Group("/system")
 	systemGroup.Use(middleware.AuthMiddleware(cfg))
+	systemGroup.Use(middleware.RequireAdmin())
 	systemGroup.Use(middleware.GormContextMiddleware(db))
 	{
 		// Users
