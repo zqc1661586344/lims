@@ -123,7 +123,7 @@ func (h *WorkflowHandler) ApproveTask(c *gin.Context) {
 	}
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTask(id, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTask(id, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -150,7 +150,7 @@ func (h *WorkflowHandler) RejectTask(c *gin.Context) {
 	}
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(id, userID, req.Comment); err != nil {
+	if err := h.svc.RejectTask(id, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}

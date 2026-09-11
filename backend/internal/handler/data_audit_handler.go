@@ -6,6 +6,7 @@ import (
 	"lims-backend/internal/model"
 	"lims-backend/internal/service"
 	"lims-backend/internal/utils"
+	"lims-backend/internal/workflow"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -88,6 +89,10 @@ func (h *DataAuditHandler) Update(c *gin.Context) {
 		utils.NotFound(c, "数据审核记录不存在")
 		return
 	}
+	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeDataAudit); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
 	var req struct {
 		AuditResult  string `json:"audit_result"`
 		AuditComment string `json:"audit_comment"`
@@ -121,7 +126,16 @@ func (h *DataAuditHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	if err := h.getDB(c).Delete(&model.DataAudit{}, id).Error; err != nil {
+	var item model.DataAudit
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "数据审核记录不存在")
+		return
+	}
+	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.getDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除数据审核失败: %v", err))
 		return
 	}
@@ -152,7 +166,7 @@ func (h *DataAuditHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(audit).FirstOrCreate(&audit)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -176,7 +190,7 @@ func (h *DataAuditHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(audit).FirstOrCreate(&audit)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.AuditComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.AuditComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}

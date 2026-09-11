@@ -15,6 +15,11 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	MinIO    MinIOConfig    `mapstructure:"minio"`
+	CORS     CORSConfig     `mapstructure:"cors"`
+}
+
+type CORSConfig struct {
+	AllowOrigins []string `mapstructure:"allow_origins"`
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -122,6 +127,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.JWT.Issuer == "" {
 		c.JWT.Issuer = "lims-system"
+	}
+	if len(c.CORS.AllowOrigins) == 0 {
+		c.CORS.AllowOrigins = []string{"http://localhost:5173", "http://127.0.0.1:5173"}
 	}
 }
 

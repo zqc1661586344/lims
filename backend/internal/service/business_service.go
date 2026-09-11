@@ -38,7 +38,7 @@ func (s *BusinessService) StartWorkflow(businessType string, businessID uint, ti
 // ApproveTask approves a workflow task by its process_tasks.id.
 // This is the unified low-level approve entry: it atomically advances the
 // workflow state machine AND ensures the NEXT node's business table has a row.
-func (s *BusinessService) ApproveTask(taskID uint, userID uint, comment string) error {
+func (s *BusinessService) ApproveTask(taskID uint, userID uint, userDeptID uint, comment string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		ctx, err := s.resolveTaskContext(tx, taskID)
 		if err != nil {
@@ -47,7 +47,7 @@ func (s *BusinessService) ApproveTask(taskID uint, userID uint, comment string) 
 		nodeMap := workflow.BuildNodeMap()
 		nextNode := nodeMap[ctx.NodeCode].NextNode
 
-		if err := s.engine.ApproveTaskWithTx(tx, taskID, userID, comment); err != nil {
+		if err := s.engine.ApproveTaskWithTx(tx, taskID, userID, userDeptID, comment); err != nil {
 			return err
 		}
 
@@ -60,10 +60,7 @@ func (s *BusinessService) ApproveTask(taskID uint, userID uint, comment string) 
 	})
 }
 
-// RejectTask rejects a workflow task by its process_tasks.id.
-// Same unified entry pattern: advances the workflow backward and ensures the
-// reject-target node's business table has a row.
-func (s *BusinessService) RejectTask(taskID uint, userID uint, comment string) error {
+func (s *BusinessService) RejectTask(taskID uint, userID uint, userDeptID uint, comment string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		ctx, err := s.resolveTaskContext(tx, taskID)
 		if err != nil {
@@ -75,7 +72,7 @@ func (s *BusinessService) RejectTask(taskID uint, userID uint, comment string) e
 			rejectTarget = workflow.FindPreviousNode(ctx.NodeCode)
 		}
 
-		if err := s.engine.RejectTaskWithTx(tx, taskID, userID, comment); err != nil {
+		if err := s.engine.RejectTaskWithTx(tx, taskID, userID, userDeptID, comment); err != nil {
 			return err
 		}
 
@@ -88,9 +85,7 @@ func (s *BusinessService) RejectTask(taskID uint, userID uint, comment string) e
 	})
 }
 
-// ApproveTaskByOrder resolves the current pending task for a task_order_id,
-// then delegates to the unified ApproveTask entry.
-func (s *BusinessService) ApproveTaskByOrder(orderID uint, userID uint, comment string) error {
+func (s *BusinessService) ApproveTaskByOrder(orderID uint, userID uint, userDeptID uint, comment string) error {
 	taskID, err := s.engine.GetPendingTaskIDByOrder(orderID)
 	if err != nil {
 		return err
@@ -98,12 +93,10 @@ func (s *BusinessService) ApproveTaskByOrder(orderID uint, userID uint, comment 
 	if taskID == 0 {
 		return fmt.Errorf("未找到该委托当前待办的任务(task_order_id=%d)", orderID)
 	}
-	return s.ApproveTask(taskID, userID, comment)
+	return s.ApproveTask(taskID, userID, userDeptID, comment)
 }
 
-// RejectTaskByOrder resolves the current pending task for a task_order_id,
-// then delegates to the unified RejectTask entry.
-func (s *BusinessService) RejectTaskByOrder(orderID uint, userID uint, comment string) error {
+func (s *BusinessService) RejectTaskByOrder(orderID uint, userID uint, userDeptID uint, comment string) error {
 	taskID, err := s.engine.GetPendingTaskIDByOrder(orderID)
 	if err != nil {
 		return err
@@ -111,14 +104,10 @@ func (s *BusinessService) RejectTaskByOrder(orderID uint, userID uint, comment s
 	if taskID == 0 {
 		return fmt.Errorf("未找到该委托当前待办的任务(task_order_id=%d)", orderID)
 	}
-	return s.RejectTask(taskID, userID, comment)
+	return s.RejectTask(taskID, userID, userDeptID, comment)
 }
 
-// ApproveWithBusiness executes a business save callback and workflow approval
-// inside a single transaction to guarantee data consistency.
-// The callback is responsible for writing the CURRENT node's business record;
-// the unified ApproveTask takes care of the ENGINE advance + NEXT node's record.
-func (s *BusinessService) ApproveWithBusiness(orderID uint, userID uint, comment string, save func(tx *gorm.DB) error) error {
+func (s *BusinessService) ApproveWithBusiness(orderID uint, userID uint, userDeptID uint, comment string, save func(tx *gorm.DB) error) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if save != nil {
 			if err := save(tx); err != nil {
@@ -140,7 +129,7 @@ func (s *BusinessService) ApproveWithBusiness(orderID uint, userID uint, comment
 		nodeMap := workflow.BuildNodeMap()
 		nextNode := nodeMap[ctx.NodeCode].NextNode
 
-		if err := s.engine.ApproveTaskWithTx(tx, taskID, userID, comment); err != nil {
+		if err := s.engine.ApproveTaskWithTx(tx, taskID, userID, userDeptID, comment); err != nil {
 			return err
 		}
 		if nextNode != "" && nextNode != workflow.NodeTaskCreate {
@@ -150,8 +139,7 @@ func (s *BusinessService) ApproveWithBusiness(orderID uint, userID uint, comment
 	})
 }
 
-// RejectWithBusiness mirrors ApproveWithBusiness for the reject path.
-func (s *BusinessService) RejectWithBusiness(orderID uint, userID uint, comment string, save func(tx *gorm.DB) error) error {
+func (s *BusinessService) RejectWithBusiness(orderID uint, userID uint, userDeptID uint, comment string, save func(tx *gorm.DB) error) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if save != nil {
 			if err := save(tx); err != nil {
@@ -176,7 +164,7 @@ func (s *BusinessService) RejectWithBusiness(orderID uint, userID uint, comment 
 			rejectTarget = workflow.FindPreviousNode(ctx.NodeCode)
 		}
 
-		if err := s.engine.RejectTaskWithTx(tx, taskID, userID, comment); err != nil {
+		if err := s.engine.RejectTaskWithTx(tx, taskID, userID, userDeptID, comment); err != nil {
 			return err
 		}
 		if rejectTarget != "" && rejectTarget != workflow.NodeTaskCreate {
@@ -184,6 +172,32 @@ func (s *BusinessService) RejectWithBusiness(orderID uint, userID uint, comment 
 		}
 		return nil
 	})
+}
+
+func (s *BusinessService) CheckInstanceRunning(tx *gorm.DB, businessType string, businessID uint) error {
+	var count int64
+	if err := tx.Raw(`SELECT COUNT(*) FROM process_instances
+		WHERE business_type = ? AND business_id = ? AND status = 'running'`,
+		businessType, businessID).Scan(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("该记录关联运行中的流程，无法删除")
+	}
+	return nil
+}
+
+func (s *BusinessService) CheckNodeNotAdvanced(tx *gorm.DB, businessType string, businessID uint, nodeCode string) error {
+	var currentNode string
+	if err := tx.Raw(`SELECT current_node FROM process_instances
+		WHERE business_type = ? AND business_id = ? AND status = 'running'
+		LIMIT 1`, businessType, businessID).Scan(&currentNode).Error; err != nil {
+		return err
+	}
+	if currentNode != "" && currentNode != nodeCode {
+		return workflow.ErrTaskAlreadyApproved
+	}
+	return nil
 }
 
 // taskContext holds the minimal workflow/instance context resolved from a taskID.
@@ -358,34 +372,26 @@ func parseTestItemIDs(raw string) ([]uint, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
-	fmt.Printf("[DEBUG parseTestItemIDs] raw = %s\n", raw)
 	var outer []string
 	if err := json.Unmarshal([]byte(raw), &outer); err != nil {
-		fmt.Printf("[DEBUG parseTestItemIDs] outer unmarshal failed: %v\n", err)
 		var outer2 []map[string]interface{}
 		if err2 := json.Unmarshal([]byte(raw), &outer2); err2 == nil {
-			fmt.Printf("[DEBUG parseTestItemIDs] fallback outer2 len=%d\n", len(outer2))
 			for _, m := range outer2 {
 				if v, ok := m["test_item_id"].(float64); ok && uint(v) > 0 {
-					fmt.Printf("[DEBUG parseTestItemIDs] direct item id=%d\n", uint(v))
 				}
 			}
 		}
 		return nil, fmt.Errorf("outer: %w", err)
 	}
-	fmt.Printf("[DEBUG parseTestItemIDs] outer len=%d\n", len(outer))
 	seen := make(map[uint]struct{})
 	var ids []uint
-	for i, s := range outer {
-		fmt.Printf("[DEBUG parseTestItemIDs] item[%d] = %s\n", i, s)
+	for _, s := range outer {
 		var obj struct {
 			TestItemID uint `json:"test_item_id"`
 		}
 		if err := json.Unmarshal([]byte(s), &obj); err != nil {
-			fmt.Printf("[DEBUG parseTestItemIDs] inner unmarshal failed: %v\n", err)
 			continue
 		}
-		fmt.Printf("[DEBUG parseTestItemIDs] item[%d] parsed id=%d\n", i, obj.TestItemID)
 		if obj.TestItemID > 0 {
 			if _, dup := seen[obj.TestItemID]; !dup {
 				seen[obj.TestItemID] = struct{}{}
@@ -393,7 +399,6 @@ func parseTestItemIDs(raw string) ([]uint, error) {
 			}
 		}
 	}
-	fmt.Printf("[DEBUG parseTestItemIDs] final ids = %v\n", ids)
 	return ids, nil
 }
 

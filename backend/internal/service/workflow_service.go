@@ -33,14 +33,14 @@ func (s *WorkflowService) StartInstance(businessType string, businessID uint, ti
 
 // ApproveTask delegates to BusinessService.ApproveTask to guarantee business
 // record creation for the next node.
-func (s *WorkflowService) ApproveTask(taskID uint, userID uint, comment string) error {
-	return s.business.ApproveTask(taskID, userID, comment)
+func (s *WorkflowService) ApproveTask(taskID uint, userID uint, userDeptID uint, comment string) error {
+	return s.business.ApproveTask(taskID, userID, userDeptID, comment)
 }
 
 // RejectTask delegates to BusinessService.RejectTask to guarantee business
 // record creation for the reject-target node.
-func (s *WorkflowService) RejectTask(taskID uint, userID uint, comment string) error {
-	return s.business.RejectTask(taskID, userID, comment)
+func (s *WorkflowService) RejectTask(taskID uint, userID uint, userDeptID uint, comment string) error {
+	return s.business.RejectTask(taskID, userID, userDeptID, comment)
 }
 
 // GetPendingTasks returns pending tasks.

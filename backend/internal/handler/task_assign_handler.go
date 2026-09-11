@@ -2,10 +2,12 @@ package handler
 
 import (
 	"fmt"
+
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
 	"lims-backend/internal/service"
 	"lims-backend/internal/utils"
+	"lims-backend/internal/workflow"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -86,6 +88,10 @@ func (h *TaskAssignHandler) Update(c *gin.Context) {
 		utils.NotFound(c, "任务分配记录不存在")
 		return
 	}
+	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeTaskAssign); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
 	var req struct {
 		AssignedTo   string `json:"assigned_to"`
 		TestItemList string `json:"test_item_list"`
@@ -115,7 +121,16 @@ func (h *TaskAssignHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	if err := h.getDB(c).Delete(&model.TaskAssign{}, id).Error; err != nil {
+	var item model.TaskAssign
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "任务分配记录不存在")
+		return
+	}
+	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.getDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除任务分配失败: %v", err))
 		return
 	}
@@ -141,7 +156,7 @@ func (h *TaskAssignHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -163,7 +178,7 @@ func (h *TaskAssignHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}

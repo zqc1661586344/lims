@@ -36,13 +36,18 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 	// Global middleware
 	r.Use(gin.Recovery())
 	r.Use(middleware.LoggerMiddleware(logger))
-	r.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true,
+	corsConfig := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Disposition"},
 		AllowCredentials: true,
-	}))
+	}
+	if cfg.Env == "development" && len(cfg.CORS.AllowOrigins) == 0 {
+		corsConfig.AllowAllOrigins = true
+	} else {
+		corsConfig.AllowOrigins = cfg.CORS.AllowOrigins
+	}
+	r.Use(cors.New(corsConfig))
 
 	// API routes
 	api := r.Group("/api")

@@ -70,15 +70,13 @@ func (e *Engine) StartInstance(businessType string, businessID uint, title strin
 
 // ApproveTask approves a pending task, creating the next node's task.
 // If the approved node is the terminal node, the instance is marked completed.
-func (e *Engine) ApproveTask(taskID uint, userID uint, comment string) error {
+func (e *Engine) ApproveTask(taskID uint, userID uint, userDeptID uint, comment string) error {
 	return e.db.Transaction(func(tx *gorm.DB) error {
-		return e.ApproveTaskWithTx(tx, taskID, userID, comment)
+		return e.ApproveTaskWithTx(tx, taskID, userID, userDeptID, comment)
 	})
 }
 
-// ApproveTaskWithTx is the transaction-aware core of ApproveTask.
-// The caller is responsible for starting and committing the transaction.
-func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, comment string) error {
+func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDeptID uint, comment string) error {
 	task, err := e.getTaskForUpdate(tx, taskID)
 	if err != nil {
 		return err
@@ -86,15 +84,19 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, commen
 	if task.Status != TaskStatusPending {
 		return ErrTaskAlreadyCompleted
 	}
-
-	// Fetch the instance
-	var instance struct {
-		ID          uint
-		CurrentNode string
-		Status      string
+	if task.AssigneeDeptID != 0 && task.AssigneeDeptID != userDeptID {
+		return ErrDeptNotMatch
 	}
-	if err := tx.Raw(`SELECT id, current_node, status FROM process_instances
-		WHERE id=? FOR UPDATE`, task.ProcessInstanceID).Scan(&instance).Error; err != nil {
+
+	var instance struct {
+		ID           uint
+		CurrentNode  string
+		Status       string
+		BusinessType string
+		BusinessID   uint
+	}
+	if err := tx.Raw(`SELECT id, current_node, status, business_type, business_id
+		FROM process_instances WHERE id=? FOR UPDATE`, task.ProcessInstanceID).Scan(&instance).Error; err != nil {
 		return fmt.Errorf("get instance: %w", err)
 	}
 	if instance.Status != InstanceStatusRunning {
@@ -106,7 +108,6 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, commen
 		return ErrUnknownNode
 	}
 
-	// Mark current task as completed
 	if err := tx.Exec(`UPDATE process_tasks SET status=?, comment=?, updated_at=NOW()
 		WHERE id=?`,
 		TaskStatusCompleted, comment, taskID).Error; err != nil {
@@ -115,13 +116,16 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, commen
 
 	nextNode := nodeDef.NextNode
 	if nextNode == "" {
-		// Terminal node — complete the instance
 		if err := tx.Exec(`UPDATE process_instances SET status=?, current_node=?, updated_at=NOW()
 			WHERE id=?`, InstanceStatusCompleted, task.NodeCode, instance.ID).Error; err != nil {
 			return fmt.Errorf("complete instance: %w", err)
 		}
+		if instance.BusinessType == "task_order" {
+			if err := tx.Exec(`UPDATE task_orders SET status=3 WHERE id=?`, instance.BusinessID).Error; err != nil {
+				return fmt.Errorf("update task_order status: %w", err)
+			}
+		}
 	} else {
-		// Create the next task
 		nextDef, ok := e.nodeMap[nextNode]
 		if !ok {
 			return ErrUnknownNode
@@ -129,32 +133,35 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, commen
 		if err := e.createTaskWithTx(tx, instance.ID, nextNode, nextDef.Name, 0); err != nil {
 			return err
 		}
-		// Advance the instance current node
 		if err := tx.Exec(`UPDATE process_instances SET current_node=?, updated_at=NOW()
 			WHERE id=?`, nextNode, instance.ID).Error; err != nil {
 			return fmt.Errorf("advance instance: %w", err)
+		}
+		if instance.BusinessType == "task_order" {
+			if err := tx.Exec(`UPDATE task_orders SET status=2 WHERE id=?`, instance.BusinessID).Error; err != nil {
+				return fmt.Errorf("update task_order status: %w", err)
+			}
 		}
 	}
 	return nil
 }
 
-// RejectTask rejects a pending task, creating a new pending task for the
-// rejection target node (typically the previous node in the workflow).
-func (e *Engine) RejectTask(taskID uint, userID uint, comment string) error {
+func (e *Engine) RejectTask(taskID uint, userID uint, userDeptID uint, comment string) error {
 	return e.db.Transaction(func(tx *gorm.DB) error {
-		return e.RejectTaskWithTx(tx, taskID, userID, comment)
+		return e.RejectTaskWithTx(tx, taskID, userID, userDeptID, comment)
 	})
 }
 
-// RejectTaskWithTx is the transaction-aware core of RejectTask.
-// The caller is responsible for starting and committing the transaction.
-func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, comment string) error {
+func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDeptID uint, comment string) error {
 	task, err := e.getTaskForUpdate(tx, taskID)
 	if err != nil {
 		return err
 	}
 	if task.Status != TaskStatusPending {
 		return ErrTaskAlreadyCompleted
+	}
+	if task.AssigneeDeptID != 0 && task.AssigneeDeptID != userDeptID {
+		return ErrDeptNotMatch
 	}
 
 	nodeDef, ok := e.nodeMap[task.NodeCode]
@@ -170,21 +177,18 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, comment
 		return ErrCannotRejectFromFirstNode
 	}
 
-	// Fetch the instance
 	var instanceID uint
 	if err := tx.Raw(`SELECT id FROM process_instances WHERE id=? FOR UPDATE`,
 		task.ProcessInstanceID).Scan(&instanceID).Error; err != nil {
 		return fmt.Errorf("get instance: %w", err)
 	}
 
-	// Mark current task as rejected
 	if err := tx.Exec(`UPDATE process_tasks SET status=?, comment=?, updated_at=NOW()
 		WHERE id=?`,
 		TaskStatusRejected, comment, taskID).Error; err != nil {
 		return fmt.Errorf("update task rejected: %w", err)
 	}
 
-	// Create a new pending task for the reject target node
 	targetDef, ok := e.nodeMap[rejectTarget]
 	if !ok {
 		return ErrUnknownNode
@@ -193,7 +197,6 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, comment
 		return err
 	}
 
-	// Update instance current node back to reject target
 	if err := tx.Exec(`UPDATE process_instances SET current_node=?, updated_at=NOW()
 		WHERE id=?`, rejectTarget, instanceID).Error; err != nil {
 		return fmt.Errorf("revert instance node: %w", err)
@@ -381,11 +384,13 @@ type taskRow struct {
 	NodeCode          string
 	Status            string
 	Version           int
+	AssigneeDeptID    uint
 }
 
 func (e *Engine) getTaskForUpdate(tx *gorm.DB, taskID uint) (*taskRow, error) {
 	var row taskRow
-	if err := tx.Raw(`SELECT id, process_instance_id, node_code, status, version
+	if err := tx.Raw(`SELECT id, process_instance_id, node_code, status, version,
+		COALESCE(assignee_dept_id, 0) as assignee_dept_id
 		FROM process_tasks WHERE id=? FOR UPDATE`, taskID).Scan(&row).Error; err != nil {
 		return nil, fmt.Errorf("get task: %w", err)
 	}

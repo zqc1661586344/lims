@@ -6,6 +6,7 @@ import (
 	"lims-backend/internal/model"
 	"lims-backend/internal/service"
 	"lims-backend/internal/utils"
+	"lims-backend/internal/workflow"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -94,6 +95,10 @@ func (h *ContractReviewHandler) Update(c *gin.Context) {
 		utils.NotFound(c, "合同评审记录不存在")
 		return
 	}
+	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeContractReview); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
 	var req SaveContractReviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
@@ -124,7 +129,16 @@ func (h *ContractReviewHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	if err := h.getDB(c).Delete(&model.ContractReview{}, id).Error; err != nil {
+	var item model.ContractReview
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "合同评审记录不存在")
+		return
+	}
+	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.getDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除合同评审失败: %v", err))
 		return
 	}
@@ -156,7 +170,7 @@ func (h *ContractReviewHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.ReviewComment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ReviewComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -182,7 +196,7 @@ func (h *ContractReviewHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.ReviewComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ReviewComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}

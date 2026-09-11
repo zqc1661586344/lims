@@ -91,3 +91,11 @@ func GetPermissions(c *gin.Context) []string {
 	}
 	return perms.([]string)
 }
+
+func GetDeptIDVal(c *gin.Context) uint {
+	d := GetDeptID(c)
+	if d == nil {
+		return 0
+	}
+	return *d
+}

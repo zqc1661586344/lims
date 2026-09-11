@@ -6,6 +6,7 @@ import (
 	"lims-backend/internal/model"
 	"lims-backend/internal/service"
 	"lims-backend/internal/utils"
+	"lims-backend/internal/workflow"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -88,6 +89,10 @@ func (h *DataReviewHandler) Update(c *gin.Context) {
 		utils.NotFound(c, "数据复核记录不存在")
 		return
 	}
+	if err := h.svc.CheckNodeNotAdvanced(h.getDB(c), "task_order", item.TaskOrderID, workflow.NodeDataReview); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
 	var req struct {
 		ReviewResult  string `json:"review_result"`
 		ReviewComment string `json:"review_comment"`
@@ -121,7 +126,16 @@ func (h *DataReviewHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	if err := h.getDB(c).Delete(&model.DataReview{}, id).Error; err != nil {
+	var item model.DataReview
+	if err := h.getDB(c).First(&item, id).Error; err != nil {
+		utils.NotFound(c, "数据复核记录不存在")
+		return
+	}
+	if err := h.svc.CheckInstanceRunning(h.getDB(c), "task_order", item.TaskOrderID); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.getDB(c).Delete(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("删除数据复核失败: %v", err))
 		return
 	}
@@ -152,7 +166,7 @@ func (h *DataReviewHandler) Approve(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, req.Comment); err != nil {
+	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
 		return
 	}
@@ -176,7 +190,7 @@ func (h *DataReviewHandler) Reject(c *gin.Context) {
 	h.getDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, req.ReviewComment); err != nil {
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ReviewComment); err != nil {
 		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
 		return
 	}
