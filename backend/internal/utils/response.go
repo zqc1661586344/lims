@@ -3,6 +3,7 @@ package utils
 import (
 	"net/http"
 	"reflect"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -89,4 +90,37 @@ func Unauthorized(c *gin.Context, message string) {
 // Forbidden returns a 403 error.
 func Forbidden(c *gin.Context, message string) {
 	Error(c, http.StatusForbidden, message)
+}
+
+func GetPagination(c *gin.Context) (page, pageSize, offset int) {
+	page = 1
+	pageSize = 20
+	if p := c.Query("page"); p != "" {
+		if v, err := strconv.Atoi(p); err == nil && v > 0 {
+			page = v
+		}
+	}
+	if ps := c.Query("page_size"); ps != "" {
+		if v, err := strconv.Atoi(ps); err == nil && v > 0 && v <= 500 {
+			pageSize = v
+		}
+	}
+	offset = (page - 1) * pageSize
+	return
+}
+
+type PageResult struct {
+	Items    interface{} `json:"items"`
+	Total    int64       `json:"total"`
+	Page     int         `json:"page"`
+	PageSize int         `json:"page_size"`
+}
+
+func SuccessPage(c *gin.Context, items interface{}, total int64, page, pageSize int) {
+	Success(c, PageResult{
+		Items:    normalizeData(items),
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
 }

@@ -5,6 +5,7 @@ import (
 	"lims-backend/internal/handler"
 	system "lims-backend/internal/handler/system"
 	"lims-backend/internal/middleware"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -16,8 +17,9 @@ func RegisterSystemRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 
 	// Public auth routes (no token required)
 	authGroup := r.Group("/auth")
+	loginLimiter := middleware.NewRateLimiter(time.Minute, 10)
 	{
-		authGroup.POST("/login", auth.Login)
+		authGroup.POST("/login", loginLimiter.Middleware(), auth.Login)
 	}
 
 	// Authenticated routes

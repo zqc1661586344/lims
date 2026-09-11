@@ -32,6 +32,7 @@ func (h *SamplingSheetHandler) getDB(c *gin.Context) *gorm.DB {
 // ─── SamplingSheetTemplate CRUD ──────────────────────────────────
 
 func (h *SamplingSheetHandler) ListTemplates(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var items []model.SamplingSheetTemplate
 	query := h.getDB(c).Order("version DESC, id DESC")
 	if name := c.Query("name"); name != "" {
@@ -46,11 +47,16 @@ func (h *SamplingSheetHandler) ListTemplates(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
-	if err := query.Find(&items).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.SamplingSheetTemplate{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("查询采样单模板失败: %v", err))
 		return
 	}
-	utils.Success(c, items)
+	utils.SuccessPage(c, items, total, page, pageSize)
 }
 
 func (h *SamplingSheetHandler) GetTemplate(c *gin.Context) {
@@ -202,6 +208,7 @@ func (h *SamplingSheetHandler) GetTemplateBySampleType(c *gin.Context) {
 // ─── SamplingSheet (instance) CRUD ───────────────────────────────
 
 func (h *SamplingSheetHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var items []model.SamplingSheet
 	query := h.getDB(c).Preload("Template").Order("id DESC")
 	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
@@ -213,11 +220,16 @@ func (h *SamplingSheetHandler) List(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
-	if err := query.Find(&items).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.SamplingSheet{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("查询采样单失败: %v", err))
 		return
 	}
-	utils.Success(c, items)
+	utils.SuccessPage(c, items, total, page, pageSize)
 }
 
 func (h *SamplingSheetHandler) Get(c *gin.Context) {

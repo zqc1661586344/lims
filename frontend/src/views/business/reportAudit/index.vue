@@ -117,7 +117,7 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (taskOrderIdFilter.value) params.task_order_id = taskOrderIdFilter.value
     const res = await getReportAuditList(params)
-    items.value = res.data
+    items.value = res.data?.items ?? res.data
   } finally { loading.value = false }
 }
 
@@ -154,7 +154,7 @@ async function loadSourceReport(taskOrderId: number) {
   if (!taskOrderId) return
   try {
     const res = await getReportPrepareList({ task_order_id: String(taskOrderId) })
-    const list = (res.data || []) as ReportPrepare[]
+    const list = ((res.data?.items ?? res.data) || []) as ReportPrepare[]
     sourceReport.value = list.length ? list[0] : null
     const dr = await getDataEntryList({ task_order_id: String(taskOrderId) })
     rawEntries.value = (dr.data || []) as DataEntry[]

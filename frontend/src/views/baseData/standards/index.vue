@@ -96,7 +96,7 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (keyword.value) params.keyword = keyword.value
     const res = await getTestStandards(params)
-    standards.value = res.data
+    standards.value = res.data?.items ?? res.data
   } finally {
     loading.value = false
   }

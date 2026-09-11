@@ -59,7 +59,7 @@ onMounted(async () => {
   await loadTasks()
   try {
     const res = await getNodeDefinitions()
-    nodeDefs.value = res.data
+    nodeDefs.value = res.data?.items ?? res.data
   } catch {
     // nodes optional
   }
@@ -93,7 +93,7 @@ async function showDetail(task: unknown) {
   selectedInstanceId.value = t.process_instance_id
   try {
     const res = await getProcessHistory(t.process_instance_id)
-    timelineNodes.value = res.data as TimelineNode[]
+    timelineNodes.value = res.data?.items ?? res.data as TimelineNode[]
   } catch {
     timelineNodes.value = []
   }

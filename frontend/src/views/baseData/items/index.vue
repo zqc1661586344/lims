@@ -115,7 +115,7 @@ const categoryFilter = ref('')
 onMounted(async () => {
   await loadData()
   const res = await getTestStandards()
-  standards.value = res.data
+  standards.value = res.data?.items ?? res.data
 })
 
 async function loadData() {
@@ -125,7 +125,7 @@ async function loadData() {
     if (keyword.value) params.keyword = keyword.value
     if (categoryFilter.value) params.category = categoryFilter.value
     const res = await getTestItems(params)
-    items.value = res.data
+    items.value = res.data?.items ?? res.data
   } finally {
     loading.value = false
   }

@@ -31,6 +31,7 @@ func (h *TestItemHandler) getDB(c *gin.Context) *gorm.DB {
 }
 
 func (h *TestItemHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var items []model.TestItem
 	query := h.getDB(c).Preload("Standard")
 
@@ -40,11 +41,16 @@ func (h *TestItemHandler) List(c *gin.Context) {
 	if cat := c.Query("category"); cat != "" {
 		query = query.Where("category = ?", cat)
 	}
-	if err := query.Order("id DESC").Find(&items).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.TestItem{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
 		utils.InternalError(c, "查询检测项目失败")
 		return
 	}
-	utils.Success(c, items)
+	utils.SuccessPage(c, items, total, page, pageSize)
 }
 
 func (h *TestItemHandler) Get(c *gin.Context) {
@@ -180,17 +186,23 @@ func (h *TestStandardHandler) getDB(c *gin.Context) *gorm.DB {
 }
 
 func (h *TestStandardHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var standards []model.TestStandard
 	query := h.getDB(c)
 
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("name LIKE ? OR code LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
-	if err := query.Order("id DESC").Find(&standards).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.TestStandard{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&standards).Error; err != nil {
 		utils.InternalError(c, "查询检测标准失败")
 		return
 	}
-	utils.Success(c, standards)
+	utils.SuccessPage(c, standards, total, page, pageSize)
 }
 
 func (h *TestStandardHandler) Get(c *gin.Context) {
@@ -332,17 +344,23 @@ func (h *EquipmentHandler) getDB(c *gin.Context) *gorm.DB {
 }
 
 func (h *EquipmentHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var equipments []model.Equipment
 	query := h.getDB(c)
 
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("name LIKE ? OR code LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
-	if err := query.Order("id DESC").Find(&equipments).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.Equipment{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&equipments).Error; err != nil {
 		utils.InternalError(c, "查询设备失败")
 		return
 	}
-	utils.Success(c, equipments)
+	utils.SuccessPage(c, equipments, total, page, pageSize)
 }
 
 func (h *EquipmentHandler) Get(c *gin.Context) {
@@ -496,17 +514,23 @@ func (h *ReagentHandler) getDB(c *gin.Context) *gorm.DB {
 }
 
 func (h *ReagentHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var reagents []model.Reagent
 	query := h.getDB(c)
 
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("name LIKE ? OR code LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
-	if err := query.Order("id DESC").Find(&reagents).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.Reagent{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&reagents).Error; err != nil {
 		utils.InternalError(c, "查询试剂失败")
 		return
 	}
-	utils.Success(c, reagents)
+	utils.SuccessPage(c, reagents, total, page, pageSize)
 }
 
 func (h *ReagentHandler) Get(c *gin.Context) {

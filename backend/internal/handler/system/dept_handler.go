@@ -1,8 +1,8 @@
 package system
 
 import (
-	"lims-backend/internal/model"
 	"lims-backend/internal/middleware"
+	"lims-backend/internal/model"
 	"lims-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -25,12 +25,15 @@ func (h *DeptHandler) getDB(c *gin.Context) *gorm.DB {
 }
 
 func (h *DeptHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var depts []model.Dept
-	if err := h.getDB(c).Preload("Children").Order("sort ASC").Find(&depts).Error; err != nil {
+	var total int64
+	h.getDB(c).Preload("Children").Count(&total)
+	if err := h.getDB(c).Preload("Children").Order("sort ASC").Limit(pageSize).Offset(offset).Find(&depts).Error; err != nil {
 		utils.InternalError(c, "查询部门列表失败")
 		return
 	}
-	utils.Success(c, depts)
+	utils.SuccessPage(c, depts, total, page, pageSize)
 }
 
 func (h *DeptHandler) Get(c *gin.Context) {

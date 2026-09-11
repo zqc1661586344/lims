@@ -93,7 +93,7 @@ async function loadRoles() {
   loading.value = true
   try {
     const res = await getRoles()
-    roles.value = res.data
+    roles.value = res.data?.items ?? res.data
   } finally {
     loading.value = false
   }
@@ -101,7 +101,7 @@ async function loadRoles() {
 
 async function loadPermissions() {
   const res = await getPermissions()
-  permissions.value = res.data
+  permissions.value = res.data?.items ?? res.data
 }
 
 // --- Form dialog ---

@@ -1,8 +1,8 @@
 package system
 
 import (
-	"lims-backend/internal/model"
 	"lims-backend/internal/middleware"
+	"lims-backend/internal/model"
 	"lims-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -25,12 +25,15 @@ func (h *RoleHandler) getDB(c *gin.Context) *gorm.DB {
 }
 
 func (h *RoleHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var roles []model.Role
-	if err := h.getDB(c).Preload("Permissions").Order("id ASC").Find(&roles).Error; err != nil {
+	var total int64
+	h.getDB(c).Preload("Permissions").Count(&total)
+	if err := h.getDB(c).Preload("Permissions").Order("id ASC").Limit(pageSize).Offset(offset).Find(&roles).Error; err != nil {
 		utils.InternalError(c, "查询角色列表失败")
 		return
 	}
-	utils.Success(c, roles)
+	utils.SuccessPage(c, roles, total, page, pageSize)
 }
 
 func (h *RoleHandler) Get(c *gin.Context) {

@@ -107,7 +107,7 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (keyword.value) params.keyword = keyword.value
     const res = await getEquipmentList(params)
-    list.value = res.data
+    list.value = res.data?.items ?? res.data
   } finally {
     loading.value = false
   }

@@ -37,17 +37,23 @@ func (h *TaskOrderHandler) getDB(c *gin.Context) *gorm.DB {
 
 // List 返回任务委托列表
 func (h *TaskOrderHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var items []model.TaskOrder
 	query := h.getDB(c).Order("id DESC")
 	if keyword := c.Query("keyword"); keyword != "" {
 		query = query.Where("order_no LIKE ? OR customer_name LIKE ? OR project_name LIKE ?",
 			"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
 	}
-	if err := query.Find(&items).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.TaskOrder{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("查询任务委托失败: %v", err))
 		return
 	}
-	utils.Success(c, items)
+	utils.SuccessPage(c, items, total, page, pageSize)
 }
 
 // Get 获取单个任务委托

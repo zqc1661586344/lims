@@ -41,6 +41,7 @@ func toUint(s string) (uint, error) {
 // ─── LabSheetTemplate CRUD ──────────────────────────────────────
 
 func (h *LabSheetHandler) ListTemplates(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var items []model.LabSheetTemplate
 	query := h.getDB(c).Order("version DESC, id DESC")
 	if name := c.Query("name"); name != "" {
@@ -55,11 +56,16 @@ func (h *LabSheetHandler) ListTemplates(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
-	if err := query.Find(&items).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.LabSheetTemplate{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("查询模板失败: %v", err))
 		return
 	}
-	utils.Success(c, items)
+	utils.SuccessPage(c, items, total, page, pageSize)
 }
 
 func (h *LabSheetHandler) GetTemplate(c *gin.Context) {
@@ -211,6 +217,7 @@ func (h *LabSheetHandler) GetTemplateByItem(c *gin.Context) {
 // ─── LabSheet (instance) CRUD ────────────────────────────────────
 
 func (h *LabSheetHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var items []model.LabSheet
 	query := h.getDB(c).Preload("Template").Order("id DESC")
 	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
@@ -225,11 +232,16 @@ func (h *LabSheetHandler) List(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
-	if err := query.Find(&items).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.LabSheet{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("查询检验单失败: %v", err))
 		return
 	}
-	utils.Success(c, items)
+	utils.SuccessPage(c, items, total, page, pageSize)
 }
 
 func (h *LabSheetHandler) Get(c *gin.Context) {

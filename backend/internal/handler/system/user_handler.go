@@ -1,8 +1,8 @@
 package system
 
 import (
-	"lims-backend/internal/model"
 	"lims-backend/internal/middleware"
+	"lims-backend/internal/model"
 	"lims-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +25,7 @@ func (h *UserHandler) getDB(c *gin.Context) *gorm.DB {
 }
 
 func (h *UserHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var users []model.User
 	query := h.getDB(c).Preload("Dept").Preload("Roles")
 
@@ -35,11 +36,16 @@ func (h *UserHandler) List(c *gin.Context) {
 		query = query.Where("username LIKE ? OR real_name LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
 
-	if err := query.Order("id DESC").Find(&users).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.User{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&users).Error; err != nil {
 		utils.InternalError(c, "查询用户列表失败")
 		return
 	}
-	utils.Success(c, users)
+	utils.SuccessPage(c, users, total, page, pageSize)
 }
 
 func (h *UserHandler) Get(c *gin.Context) {

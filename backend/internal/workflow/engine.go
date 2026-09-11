@@ -19,6 +19,7 @@ type Engine struct {
 var (
 	defaultEngineOnce sync.Once
 	defaultEngine     *Engine
+	ErrOptimisticLock = errors.New("optimistic lock conflict — please retry")
 )
 
 // NewEngine creates a new workflow engine with the given GORM DB.
@@ -288,6 +289,34 @@ func (e *Engine) deptNameMap() map[string]string {
 // for a business entity (e.g. a task order). It joins the running process
 // instance for that business and finds its active pending task.
 // Returns 0 (no error) if no pending task is found.
+
+// AssignTask assigns a pending task to a specific user.
+func (e *Engine) AssignTask(taskID uint, userID uint) error {
+	return e.db.Transaction(func(tx *gorm.DB) error {
+		return e.AssignTaskWithTx(tx, taskID, userID)
+	})
+}
+
+func (e *Engine) AssignTaskWithTx(tx *gorm.DB, taskID uint, userID uint) error {
+	var task struct {
+		ID     uint
+		Status string
+	}
+	if err := tx.Raw(`SELECT id, status FROM process_tasks WHERE id=? FOR UPDATE`, taskID).Scan(&task).Error; err != nil {
+		return fmt.Errorf("get task: %w", err)
+	}
+	if task.ID == 0 {
+		return fmt.Errorf("task not found: %d", taskID)
+	}
+	if task.Status != TaskStatusPending {
+		return ErrTaskAlreadyCompleted
+	}
+	if err := tx.Exec(`UPDATE process_tasks SET assignee_user_id=? WHERE id=?`, userID, taskID).Error; err != nil {
+		return fmt.Errorf("assign task: %w", err)
+	}
+	return nil
+}
+
 func (e *Engine) getPendingTaskIDByBusiness(businessType string, businessID uint) (uint, error) {
 	return e.getPendingTaskIDByBusinessWithTx(e.db, businessType, businessID)
 }
@@ -400,11 +429,11 @@ func (e *Engine) getTaskForUpdate(tx *gorm.DB, taskID uint) (*taskRow, error) {
 	return &row, nil
 }
 
-func (e *Engine) createTask(instanceID uint, nodeCode, nodeName string, deptID uint) error {
+func (e *Engine) createTask(instanceID uint, nodeCode, nodeName string, deptID uint, assigneeUserID ...uint) error {
 	return e.createTaskWithTx(e.db, instanceID, nodeCode, nodeName, deptID)
 }
 
-func (e *Engine) createTaskWithTx(tx *gorm.DB, instanceID uint, nodeCode, nodeName string, deptID uint) error {
+func (e *Engine) createTaskWithTx(tx *gorm.DB, instanceID uint, nodeCode, nodeName string, deptID uint, assigneeUserID ...uint) error {
 	// Get the responsible department from node definition
 	def, ok := e.nodeMap[nodeCode]
 	if !ok {
@@ -417,11 +446,17 @@ func (e *Engine) createTaskWithTx(tx *gorm.DB, instanceID uint, nodeCode, nodeNa
 		return fmt.Errorf("resolve dept: %w", err)
 	}
 
+	var userIDPtr *uint
+	if len(assigneeUserID) > 0 && assigneeUserID[0] != 0 {
+		uid := assigneeUserID[0]
+		userIDPtr = &uid
+	}
 	return tx.Create(&model.ProcessTask{
 		ProcessInstanceID: instanceID,
 		NodeCode:          nodeCode,
 		NodeName:          nodeName,
 		AssigneeDeptID:    &resolvedDeptID,
+		AssigneeUserID:    userIDPtr,
 		Status:            TaskStatusPending,
 		Version:           0,
 	}).Error

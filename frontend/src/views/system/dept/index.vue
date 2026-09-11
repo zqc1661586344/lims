@@ -86,7 +86,7 @@ async function loadDepts() {
   loading.value = true
   try {
     const res = await getDepts()
-    depts.value = res.data
+    depts.value = res.data?.items ?? res.data
   } finally {
     loading.value = false
   }

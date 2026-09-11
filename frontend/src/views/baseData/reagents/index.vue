@@ -112,7 +112,7 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (keyword.value) params.keyword = keyword.value
     const res = await getReagents(params)
-    list.value = res.data
+    list.value = res.data?.items ?? res.data
   } finally {
     loading.value = false
   }

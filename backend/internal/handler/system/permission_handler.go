@@ -1,8 +1,8 @@
 package system
 
 import (
-	"lims-backend/internal/model"
 	"lims-backend/internal/middleware"
+	"lims-backend/internal/model"
 	"lims-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -25,12 +25,15 @@ func (h *PermissionHandler) getDB(c *gin.Context) *gorm.DB {
 }
 
 func (h *PermissionHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var permissions []model.Permission
-	if err := h.getDB(c).Preload("Children").Order("sort ASC").Find(&permissions).Error; err != nil {
+	var total int64
+	h.getDB(c).Preload("Children").Count(&total)
+	if err := h.getDB(c).Preload("Children").Order("sort ASC").Limit(pageSize).Offset(offset).Find(&permissions).Error; err != nil {
 		utils.InternalError(c, "查询权限列表失败")
 		return
 	}
-	utils.Success(c, permissions)
+	utils.SuccessPage(c, permissions, total, page, pageSize)
 }
 
 type CreatePermissionRequest struct {

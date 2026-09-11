@@ -93,7 +93,7 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (taskOrderIdFilter.value) params.task_order_id = taskOrderIdFilter.value
     const res = await getFieldSamplingList(params)
-    const list: FieldSamplingRow[] = res.data || []
+    const list: FieldSamplingRow[] = (res.data?.items ?? res.data) || []
 
     const sheetRes = await listSamplingSheets({ node_code: 'node_field_sampling' })
     const sheets: SamplingSheet[] = sheetRes.data || []

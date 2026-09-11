@@ -36,6 +36,10 @@ func main() {
 
 	logger.Info("Config loaded", zap.String("env", cfg.Env))
 
+	if cfg.JWT.Secret == "lims-jwt-secret-change-in-production" || len(cfg.JWT.Secret) < 16 {
+		logger.Warn("jwt.secret is using default or weak value — override via config.yaml or LIMS_JWT_SECRET env var")
+	}
+
 	// 3. Connect to database
 	db, err := initDB(cfg, logger)
 	if err != nil {

@@ -29,16 +29,22 @@ func (h *QCTaskHandler) getDB(c *gin.Context) *gorm.DB {
 }
 
 func (h *QCTaskHandler) List(c *gin.Context) {
+	page, pageSize, offset := utils.GetPagination(c)
 	var items []model.QCTask
 	query := h.getDB(c).Order("id DESC")
 	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
 		query = query.Where("task_order_id = ?", taskOrderID)
 	}
-	if err := query.Find(&items).Error; err != nil {
+	var total int64
+	if err := query.Model(&model.QCTask{}).Count(&total).Error; err != nil {
+		utils.InternalError(c, "查询失败")
+		return
+	}
+	if err := query.Limit(pageSize).Offset(offset).Find(&items).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("查询质控任务失败: %v", err))
 		return
 	}
-	utils.Success(c, items)
+	utils.SuccessPage(c, items, total, page, pageSize)
 }
 
 func (h *QCTaskHandler) Get(c *gin.Context) {

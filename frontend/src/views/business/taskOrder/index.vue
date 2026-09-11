@@ -91,7 +91,7 @@ onMounted(async () => {
   await loadData()
   try {
     const res = await getTestItems()
-    testItems.value = res.data
+    testItems.value = res.data?.items ?? res.data
   } catch {
     testItems.value = []
   }
@@ -103,7 +103,7 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (keyword.value) params.keyword = keyword.value
     const res = await getTaskOrderList(params)
-    items.value = res.data
+    items.value = res.data?.items ?? res.data
   } finally {
     loading.value = false
   }

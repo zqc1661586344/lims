@@ -37,7 +37,7 @@ async function loadSheet() {
       task_order_id: String(taskOrderId.value),
       node_code: nodeCode.value,
     })
-    const list: SamplingSheet[] = res.data || []
+    const list: SamplingSheet[] = (res.data?.items ?? res.data) || []
     let existing: SamplingSheet | undefined
     if (samplingPoint.value) {
       existing = list.find((s) => s.sampling_point === samplingPoint.value)

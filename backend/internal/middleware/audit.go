@@ -1,10 +1,11 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
+	"lims-backend/internal/model"
 	"reflect"
 	"strings"
-	"lims-backend/internal/model"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -47,6 +48,10 @@ func (p *AuditPlugin) Initialize(db *gorm.DB) error {
 		return err
 	}
 
+	// Register BEFORE UPDATE callback to capture old data.
+	if err := db.Callback().Update().Before("gorm:before_update").Register("audit:before_update", p.beforeUpdateCacheOld(skipTables)); err != nil {
+		return err
+	}
 	// Register AFTER UPDATE callback.
 	if err := db.Callback().Update().After("gorm:after_update").Register("audit:after_update", p.afterUpdate(skipTables)); err != nil {
 		return err
@@ -82,12 +87,12 @@ func (p *AuditPlugin) afterCreate(skipTables map[string]bool) func(db *gorm.DB) 
 
 		entry := model.AuditLog{
 			AffectedTable: db.Statement.Table,
-			RecordID:   recordID,
-			Action:     "CREATE",
-			OperatorID: operatorID,
-			Operator:   operator,
-			OldData:    "null", // CREATE has no previous state; jsonb requires valid JSON
-			NewData:    normalizeJSON(string(newData)),
+			RecordID:      recordID,
+			Action:        "CREATE",
+			OperatorID:    operatorID,
+			Operator:      operator,
+			OldData:       "null", // CREATE has no previous state; jsonb requires valid JSON
+			NewData:       normalizeJSON(string(newData)),
 		}
 
 		if err := db.Session(&gorm.Session{NewDB: true, SkipHooks: true}).Create(&entry).Error; err != nil {
@@ -115,16 +120,10 @@ func (p *AuditPlugin) afterUpdate(skipTables map[string]bool) func(db *gorm.DB) 
 		operatorID, operator := extractOperator(db)
 		recordID := extractRecordID(db)
 
-		// Capture old data from the model before updates were applied.
-		var oldData []byte
-		if db.Statement.Model != nil && recordID > 0 {
-			oldModel := cloneModel(db.Statement.Model)
-			tx := db.Session(&gorm.Session{NewDB: true, SkipHooks: true}).
-				Model(oldModel).
-				Where("id = ?", recordID).
-				First(oldModel)
-			if tx.Error == nil {
-				oldData, _ = json.Marshal(oldModel)
+		oldData := []byte("null")
+		if db.Statement.Context != nil {
+			if cached, ok := db.Statement.Context.Value(auditOldDataKey).([]byte); ok && cached != nil {
+				oldData = cached
 			}
 		}
 
@@ -132,12 +131,12 @@ func (p *AuditPlugin) afterUpdate(skipTables map[string]bool) func(db *gorm.DB) 
 
 		entry := model.AuditLog{
 			AffectedTable: db.Statement.Table,
-			RecordID:   recordID,
-			Action:     "UPDATE",
-			OperatorID: operatorID,
-			Operator:   operator,
-			OldData:    normalizeJSON(string(oldData)),
-			NewData:    normalizeJSON(string(newData)),
+			RecordID:      recordID,
+			Action:        "UPDATE",
+			OperatorID:    operatorID,
+			Operator:      operator,
+			OldData:       normalizeJSON(string(oldData)),
+			NewData:       normalizeJSON(string(newData)),
 		}
 
 		if err := db.Session(&gorm.Session{NewDB: true, SkipHooks: true}).Create(&entry).Error; err != nil {
@@ -175,12 +174,12 @@ func (p *AuditPlugin) afterDelete(skipTables map[string]bool) func(db *gorm.DB) 
 
 		entry := model.AuditLog{
 			AffectedTable: db.Statement.Table,
-			RecordID:   recordID,
-			Action:     "DELETE",
-			OperatorID: operatorID,
-			Operator:   operator,
-			OldData:    normalizeJSON(string(oldData)),
-			NewData:    "null", // DELETE has no new state; jsonb requires valid JSON
+			RecordID:      recordID,
+			Action:        "DELETE",
+			OperatorID:    operatorID,
+			Operator:      operator,
+			OldData:       normalizeJSON(string(oldData)),
+			NewData:       "null", // DELETE has no new state; jsonb requires valid JSON
 		}
 
 		if err := db.Session(&gorm.Session{NewDB: true, SkipHooks: true}).Create(&entry).Error; err != nil {
@@ -244,13 +243,49 @@ func extractRecordID(db *gorm.DB) uint {
 	return 0
 }
 
-// cloneModel creates a shallow copy of the model pointer.
 func cloneModel(m interface{}) interface{} {
 	if m == nil {
 		return nil
 	}
-	// Return the same pointer — GORM.Session creates a new DB session so
-	// we are reading from a separate query context, not mutating the original.
+	v := reflect.ValueOf(m)
+	if v.Kind() == reflect.Ptr {
+		newPtr := reflect.New(v.Elem().Type())
+		newPtr.Elem().Set(v.Elem())
+		return newPtr.Interface()
+	}
 	return m
 }
 
+type auditCtxKey string
+
+const auditOldDataKey auditCtxKey = "audit_old_data"
+
+func (p *AuditPlugin) beforeUpdateCacheOld(skipTables map[string]bool) func(db *gorm.DB) {
+	return func(db *gorm.DB) {
+		if db.Statement == nil || db.Statement.Table == "" {
+			return
+		}
+		if skipTables[db.Statement.Table] {
+			return
+		}
+		if db.Statement.Model == nil {
+			return
+		}
+		recordID := extractRecordID(db)
+		if recordID == 0 {
+			return
+		}
+		oldModel := cloneModel(db.Statement.Model)
+		if err := db.Session(&gorm.Session{NewDB: true, SkipHooks: true}).
+			Model(oldModel).
+			Where("id = ?", recordID).
+			First(oldModel).Error; err != nil {
+			return
+		}
+		oldData, _ := json.Marshal(oldModel)
+		if db.Statement.Context != nil {
+			ctx := context.WithValue(db.Statement.Context, auditOldDataKey, oldData)
+			db.Statement.Context = ctx
+		}
+	}
+}

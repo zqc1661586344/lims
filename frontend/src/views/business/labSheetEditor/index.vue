@@ -37,7 +37,7 @@ async function loadSheet() {
       task_order_id: String(taskOrderId.value),
       node_code: nodeCode.value,
     })
-    const list: LabSheet[] = res.data || []
+    const list: LabSheet[] = (res.data?.items ?? res.data) || []
     const existing = list.find((s) => s.test_item_id === testItemId.value)
     if (existing) {
       sheetId.value = existing.id

@@ -99,7 +99,7 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (taskOrderIdFilter.value) params.task_order_id = taskOrderIdFilter.value
     const res = await getDataAuditList(params)
-    items.value = res.data
+    items.value = res.data?.items ?? res.data
   } finally { loading.value = false }
 }
 

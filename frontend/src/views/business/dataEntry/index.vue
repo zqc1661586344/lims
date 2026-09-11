@@ -91,7 +91,7 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (taskOrderIdFilter.value) params.task_order_id = taskOrderIdFilter.value
     const res = await getDataEntryList(params)
-    const list: DataEntryRow[] = res.data || []
+    const list: DataEntryRow[] = (res.data?.items ?? res.data) || []
 
     const labSheetRes = await listLabSheets({ node_code: 'node_data_entry' })
     const labSheets: LabSheet[] = labSheetRes.data || []
