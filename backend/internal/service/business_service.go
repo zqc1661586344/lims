@@ -60,7 +60,7 @@ func (s *BusinessService) ApproveTask(taskID uint, userID uint, userDeptID uint,
 	})
 }
 
-func (s *BusinessService) RejectTask(taskID uint, userID uint, userDeptID uint, comment string) error {
+func (s *BusinessService) RejectTask(taskID uint, userID uint, userDeptID uint, comment string, rejectTarget ...string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		ctx, err := s.resolveTaskContext(tx, taskID)
 		if err != nil {
@@ -96,7 +96,7 @@ func (s *BusinessService) ApproveTaskByOrder(orderID uint, userID uint, userDept
 	return s.ApproveTask(taskID, userID, userDeptID, comment)
 }
 
-func (s *BusinessService) RejectTaskByOrder(orderID uint, userID uint, userDeptID uint, comment string) error {
+func (s *BusinessService) RejectTaskByOrder(orderID uint, userID uint, userDeptID uint, comment string, rejectTarget ...string) error {
 	taskID, err := s.engine.GetPendingTaskIDByOrder(orderID)
 	if err != nil {
 		return err
@@ -104,7 +104,7 @@ func (s *BusinessService) RejectTaskByOrder(orderID uint, userID uint, userDeptI
 	if taskID == 0 {
 		return fmt.Errorf("未找到该委托当前待办的任务(task_order_id=%d)", orderID)
 	}
-	return s.RejectTask(taskID, userID, userDeptID, comment)
+	return s.RejectTask(taskID, userID, userDeptID, comment, rejectTarget...)
 }
 
 func (s *BusinessService) ApproveWithBusiness(orderID uint, userID uint, userDeptID uint, comment string, save func(tx *gorm.DB) error) error {

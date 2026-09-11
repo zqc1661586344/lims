@@ -147,13 +147,13 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDe
 	return nil
 }
 
-func (e *Engine) RejectTask(taskID uint, userID uint, userDeptID uint, comment string) error {
+func (e *Engine) RejectTask(taskID uint, userID uint, userDeptID uint, comment string, rejectTarget ...string) error {
 	return e.db.Transaction(func(tx *gorm.DB) error {
-		return e.RejectTaskWithTx(tx, taskID, userID, userDeptID, comment)
+		return e.RejectTaskWithTx(tx, taskID, userID, userDeptID, comment, rejectTarget...)
 	})
 }
 
-func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDeptID uint, comment string) error {
+func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDeptID uint, comment string, rejectTargetOverride ...string) error {
 	task, err := e.getTaskForUpdate(tx, taskID)
 	if err != nil {
 		return err
@@ -174,6 +174,9 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDep
 	}
 
 	rejectTarget := nodeDef.RejectTarget
+	if len(rejectTargetOverride) > 0 && rejectTargetOverride[0] != "" {
+		rejectTarget = rejectTargetOverride[0]
+	}
 	if rejectTarget == "" {
 		return ErrCannotRejectFromFirstNode
 	}

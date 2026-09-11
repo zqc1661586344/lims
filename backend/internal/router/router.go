@@ -34,7 +34,7 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 	r := gin.New()
 
 	// Global middleware
-	r.Use(gin.Recovery())
+	r.Use(middleware.Recovery(logger))
 	r.Use(middleware.LoggerMiddleware(logger))
 	corsConfig := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},

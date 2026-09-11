@@ -39,8 +39,8 @@ func (s *WorkflowService) ApproveTask(taskID uint, userID uint, userDeptID uint,
 
 // RejectTask delegates to BusinessService.RejectTask to guarantee business
 // record creation for the reject-target node.
-func (s *WorkflowService) RejectTask(taskID uint, userID uint, userDeptID uint, comment string) error {
-	return s.business.RejectTask(taskID, userID, userDeptID, comment)
+func (s *WorkflowService) RejectTask(taskID uint, userID uint, userDeptID uint, comment string, rejectTarget ...string) error {
+	return s.business.RejectTask(taskID, userID, userDeptID, comment, rejectTarget...)
 }
 
 // GetPendingTasks returns pending tasks.
