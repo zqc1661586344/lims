@@ -11,7 +11,16 @@
         </div>
       </template>
 
-      <el-table :data="items" stripe v-loading="loading">
+      <TaskProcessBar
+        :business-type="'task_order'"
+        :selected-id="selectedRow?.task_order_id ?? null"
+        :items="items"
+        :sticky="true"
+      />
+
+      <el-table :data="items" stripe v-loading="loading"
+          highlight-current-row
+          @row-click="handleRowClick">
         <el-table-column prop="task_order_id" label="委托ID" width="80" />
         <el-table-column prop="audit_result" label="审核结果" width="100">
           <template #default="{ row }">
@@ -84,11 +93,14 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import TaskProcessBar from '@/components/TaskProcessBar.vue'
 import { getDataAuditList, getDataAudit, createDataAudit, updateDataAudit, deleteDataAudit, approveDataAudit, rejectDataAudit } from '@/api/business'
 import type { DataAudit } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<DataAudit[]>([])
+const selectedRow = ref(null)
+function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 
 onMounted(async () => { await loadData() })

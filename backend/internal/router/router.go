@@ -6,7 +6,6 @@ import (
 	"lims-backend/internal/model"
 	"lims-backend/internal/router/routes"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -36,18 +35,17 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 	// Global middleware
 	r.Use(middleware.Recovery(logger))
 	r.Use(middleware.LoggerMiddleware(logger))
-	corsConfig := cors.Config{
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length", "Content-Disposition"},
-		AllowCredentials: true,
-	}
-	if cfg.Env == "development" && len(cfg.CORS.AllowOrigins) == 0 {
-		corsConfig.AllowAllOrigins = true
-	} else {
-		corsConfig.AllowOrigins = cfg.CORS.AllowOrigins
-	}
-	r.Use(cors.New(corsConfig))
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Disposition")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		c.Next()
+	})
 
 	// API routes
 	api := r.Group("/api")

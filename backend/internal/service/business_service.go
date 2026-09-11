@@ -23,11 +23,38 @@ type BusinessService struct {
 
 // NewBusinessService creates a new business service.
 func NewBusinessService(logger *zap.Logger, db *gorm.DB) *BusinessService {
-	return &BusinessService{
+	engine := workflow.DefaultEngine(db)
+	s := &BusinessService{
 		logger: logger,
-		engine: workflow.DefaultEngine(db),
+		engine: engine,
 		db:     db,
 	}
+	engine.SetBusinessSync(s.syncTaskOrderStatus)
+	return s
+}
+
+// syncTaskOrderStatus is the business-layer callback that keeps task_orders.status
+// aligned with workflow transitions. Registered on the engine so the engine never
+// needs to know about business tables.
+//
+// Status convention (task_orders.status column):
+//
+//	2 = running (workflow advanced to a new node)
+//	3 = finished (workflow reached the terminal node)
+//	1 = rejected (rework requested, instance rewound)
+func (s *BusinessService) syncTaskOrderStatus(tx *gorm.DB, businessType string, businessID uint, event string) error {
+	if businessType != "task_order" {
+		return nil
+	}
+	switch event {
+	case "advance":
+		return tx.Exec(`UPDATE task_orders SET status=2 WHERE id=?`, businessID).Error
+	case "complete":
+		return tx.Exec(`UPDATE task_orders SET status=3 WHERE id=?`, businessID).Error
+	case "reject":
+		return tx.Exec(`UPDATE task_orders SET status=1 WHERE id=?`, businessID).Error
+	}
+	return nil
 }
 
 // StartWorkflow starts a new process instance for a business entity.

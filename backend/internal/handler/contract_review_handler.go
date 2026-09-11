@@ -20,8 +20,6 @@ func NewContractReviewHandler(logger *zap.Logger, db *gorm.DB) *ContractReviewHa
 	}
 }
 
-
-
 // List 返回合同评审列表
 func (h *ContractReviewHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
@@ -113,6 +111,10 @@ func (h *ContractReviewHandler) Delete(c *gin.Context) {
 	var item model.ContractReview
 	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "合同评审记录不存在")
+		return
+	}
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeContractReview); err != nil {
+		utils.BadRequest(c, err.Error())
 		return
 	}
 	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {

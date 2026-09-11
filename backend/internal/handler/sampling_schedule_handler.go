@@ -20,8 +20,6 @@ func NewSamplingScheduleHandler(logger *zap.Logger, db *gorm.DB) *SamplingSchedu
 	}
 }
 
-
-
 func (h *SamplingScheduleHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
 		if id := c.Query("task_order_id"); id != "" {
@@ -110,6 +108,10 @@ func (h *SamplingScheduleHandler) Delete(c *gin.Context) {
 	var item model.SamplingSchedule
 	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "采样调度记录不存在")
+		return
+	}
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeSamplingSchedule); err != nil {
+		utils.BadRequest(c, err.Error())
 		return
 	}
 	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {

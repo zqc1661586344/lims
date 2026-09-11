@@ -1,11 +1,12 @@
 package routes
 
 import (
+	"time"
+
 	"lims-backend/internal/config"
 	"lims-backend/internal/handler"
 	system "lims-backend/internal/handler/system"
 	"lims-backend/internal/middleware"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

@@ -11,7 +11,16 @@
         </div>
       </template>
 
-      <el-table :data="items" stripe v-loading="loading">
+      <TaskProcessBar
+        :business-type="'task_order'"
+        :selected-id="selectedRow?.task_order_id ?? null"
+        :items="items"
+        :sticky="true"
+      />
+
+      <el-table :data="items" stripe v-loading="loading"
+          highlight-current-row
+          @row-click="handleRowClick">
         <el-table-column prop="task_order_id" label="委托ID" width="80" />
         <el-table-column prop="report_no" label="报告编号" width="140" show-overflow-tooltip />
         <el-table-column prop="report_title" label="报告标题" min-width="180" show-overflow-tooltip />
@@ -105,11 +114,14 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import TaskProcessBar from '@/components/TaskProcessBar.vue'
 import { getReportPrepareList, getReportPrepare, createReportPrepare, updateReportPrepare, deleteReportPrepare, approveReportPrepare, rejectReportPrepare, getDataEntryList } from '@/api/business'
 import type { ReportPrepare, DataEntry } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<ReportPrepare[]>([])
+const selectedRow = ref(null)
+function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 
 onMounted(async () => { await loadData() })

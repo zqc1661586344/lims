@@ -21,8 +21,6 @@ func NewTaskAssignHandler(logger *zap.Logger, db *gorm.DB) *TaskAssignHandler {
 	}
 }
 
-
-
 func (h *TaskAssignHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
 		if id := c.Query("task_order_id"); id != "" {
@@ -105,6 +103,10 @@ func (h *TaskAssignHandler) Delete(c *gin.Context) {
 	var item model.TaskAssign
 	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "任务分配记录不存在")
+		return
+	}
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeTaskAssign); err != nil {
+		utils.BadRequest(c, err.Error())
 		return
 	}
 	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {

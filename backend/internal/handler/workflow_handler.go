@@ -163,6 +163,27 @@ func (h *WorkflowHandler) GetNodeDefinitions(c *gin.Context) {
 	utils.Success(c, defs)
 }
 
+// GetProgress returns workflow progress for a business object.
+// Path: /workflow/progress/:businessType/:businessId
+func (h *WorkflowHandler) GetProgress(c *gin.Context) {
+	businessType := c.Param("businessType")
+	businessID, err := parseUint(c.Param("businessId"))
+	if err != nil {
+		utils.BadRequest(c, "无效的业务ID")
+		return
+	}
+	progress, err := h.svc.GetProgressByBusiness(businessType, businessID)
+	if err != nil {
+		utils.InternalError(c, "查询流程进度失败")
+		return
+	}
+	if progress == nil {
+		utils.Success(c, nil)
+		return
+	}
+	utils.Success(c, progress)
+}
+
 // parseUint parses a string to uint.
 func parseUint(s string) (uint, error) {
 	var v uint

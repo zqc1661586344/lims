@@ -21,8 +21,6 @@ func NewReportPrepareHandler(logger *zap.Logger, db *gorm.DB) *ReportPrepareHand
 	}
 }
 
-
-
 func (h *ReportPrepareHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
 		if id := c.Query("task_order_id"); id != "" {
@@ -117,6 +115,10 @@ func (h *ReportPrepareHandler) Delete(c *gin.Context) {
 	var item model.ReportPrepare
 	if err := h.GetDB(c).First(&item, id).Error; err != nil {
 		utils.NotFound(c, "报告编制记录不存在")
+		return
+	}
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeReportPrepare); err != nil {
+		utils.BadRequest(c, err.Error())
 		return
 	}
 	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {

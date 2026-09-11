@@ -4,6 +4,7 @@ import (
 	"lims-backend/internal/config"
 	"lims-backend/internal/handler"
 	"lims-backend/internal/middleware"
+	"lims-backend/internal/workflow"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -40,7 +41,10 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", taskOrderH.Get)
 			g.PUT("/:id", taskOrderH.Update)
 			g.DELETE("/:id", taskOrderH.Delete)
-			g.POST("/:id/submit", taskOrderH.Submit)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptBusiness))
+			deptG.POST("/:id/submit", taskOrderH.Submit)
 		}
 
 		g = group.Group("/contract-reviews")
@@ -51,8 +55,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", contractReviewH.Get)
 			g.PUT("/:id", contractReviewH.Update)
 			g.DELETE("/:id", contractReviewH.Delete)
-			g.POST("/:id/approve", contractReviewH.Approve)
-			g.POST("/:id/reject", contractReviewH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptTech))
+			deptG.POST("/:id/approve", contractReviewH.Approve)
+			deptG.POST("/:id/reject", contractReviewH.Reject)
 		}
 
 		g = group.Group("/qc-tasks")
@@ -63,8 +70,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", qcTaskH.Get)
 			g.PUT("/:id", qcTaskH.Update)
 			g.DELETE("/:id", qcTaskH.Delete)
-			g.POST("/:id/approve", qcTaskH.Approve)
-			g.POST("/:id/reject", qcTaskH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptQC))
+			deptG.POST("/:id/approve", qcTaskH.Approve)
+			deptG.POST("/:id/reject", qcTaskH.Reject)
 		}
 
 		g = group.Group("/sampling-schedules")
@@ -75,8 +85,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", samplingScheduleH.Get)
 			g.PUT("/:id", samplingScheduleH.Update)
 			g.DELETE("/:id", samplingScheduleH.Delete)
-			g.POST("/:id/approve", samplingScheduleH.Approve)
-			g.POST("/:id/reject", samplingScheduleH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptField))
+			deptG.POST("/:id/approve", samplingScheduleH.Approve)
+			deptG.POST("/:id/reject", samplingScheduleH.Reject)
 		}
 
 		g = group.Group("/field-sampling")
@@ -87,8 +100,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", fieldSamplingH.Get)
 			g.PUT("/:id", fieldSamplingH.Update)
 			g.DELETE("/:id", fieldSamplingH.Delete)
-			g.POST("/:id/approve", fieldSamplingH.Approve)
-			g.POST("/:id/reject", fieldSamplingH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptField))
+			deptG.POST("/:id/approve", fieldSamplingH.Approve)
+			deptG.POST("/:id/reject", fieldSamplingH.Reject)
 		}
 
 		g = group.Group("/sample-receiving")
@@ -99,8 +115,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", sampleReceivingH.Get)
 			g.PUT("/:id", sampleReceivingH.Update)
 			g.DELETE("/:id", sampleReceivingH.Delete)
-			g.POST("/:id/approve", sampleReceivingH.Approve)
-			g.POST("/:id/reject", sampleReceivingH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptSample))
+			deptG.POST("/:id/approve", sampleReceivingH.Approve)
+			deptG.POST("/:id/reject", sampleReceivingH.Reject)
 		}
 
 		g = group.Group("/task-assign")
@@ -111,8 +130,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", taskAssignH.Get)
 			g.PUT("/:id", taskAssignH.Update)
 			g.DELETE("/:id", taskAssignH.Delete)
-			g.POST("/:id/approve", taskAssignH.Approve)
-			g.POST("/:id/reject", taskAssignH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptLab))
+			deptG.POST("/:id/approve", taskAssignH.Approve)
+			deptG.POST("/:id/reject", taskAssignH.Reject)
 		}
 
 		g = group.Group("/data-entry")
@@ -123,8 +145,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", dataEntryH.Get)
 			g.PUT("/:id", dataEntryH.Update)
 			g.DELETE("/:id", dataEntryH.Delete)
-			g.POST("/:id/approve", dataEntryH.Approve)
-			g.POST("/:id/reject", dataEntryH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptLab))
+			deptG.POST("/:id/approve", dataEntryH.Approve)
+			deptG.POST("/:id/reject", dataEntryH.Reject)
 		}
 
 		g = group.Group("/data-review")
@@ -135,8 +160,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", dataReviewH.Get)
 			g.PUT("/:id", dataReviewH.Update)
 			g.DELETE("/:id", dataReviewH.Delete)
-			g.POST("/:id/approve", dataReviewH.Approve)
-			g.POST("/:id/reject", dataReviewH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptLab))
+			deptG.POST("/:id/approve", dataReviewH.Approve)
+			deptG.POST("/:id/reject", dataReviewH.Reject)
 		}
 
 		g = group.Group("/data-audit")
@@ -147,8 +175,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", dataAuditH.Get)
 			g.PUT("/:id", dataAuditH.Update)
 			g.DELETE("/:id", dataAuditH.Delete)
-			g.POST("/:id/approve", dataAuditH.Approve)
-			g.POST("/:id/reject", dataAuditH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptLab))
+			deptG.POST("/:id/approve", dataAuditH.Approve)
+			deptG.POST("/:id/reject", dataAuditH.Reject)
 		}
 
 		g = group.Group("/report-prepare")
@@ -159,8 +190,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", reportPrepareH.Get)
 			g.PUT("/:id", reportPrepareH.Update)
 			g.DELETE("/:id", reportPrepareH.Delete)
-			g.POST("/:id/approve", reportPrepareH.Approve)
-			g.POST("/:id/reject", reportPrepareH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptReport))
+			deptG.POST("/:id/approve", reportPrepareH.Approve)
+			deptG.POST("/:id/reject", reportPrepareH.Reject)
 		}
 
 		g = group.Group("/report-review")
@@ -171,8 +205,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", reportReviewH.Get)
 			g.PUT("/:id", reportReviewH.Update)
 			g.DELETE("/:id", reportReviewH.Delete)
-			g.POST("/:id/approve", reportReviewH.Approve)
-			g.POST("/:id/reject", reportReviewH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptLab))
+			deptG.POST("/:id/approve", reportReviewH.Approve)
+			deptG.POST("/:id/reject", reportReviewH.Reject)
 		}
 
 		g = group.Group("/report-audit")
@@ -183,8 +220,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", reportAuditH.Get)
 			g.PUT("/:id", reportAuditH.Update)
 			g.DELETE("/:id", reportAuditH.Delete)
-			g.POST("/:id/approve", reportAuditH.Approve)
-			g.POST("/:id/reject", reportAuditH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptQC))
+			deptG.POST("/:id/approve", reportAuditH.Approve)
+			deptG.POST("/:id/reject", reportAuditH.Reject)
 		}
 
 		g = group.Group("/report-sign")
@@ -195,8 +235,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", reportSignH.Get)
 			g.PUT("/:id", reportSignH.Update)
 			g.DELETE("/:id", reportSignH.Delete)
-			g.POST("/:id/approve", reportSignH.Approve)
-			g.POST("/:id/reject", reportSignH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptTech))
+			deptG.POST("/:id/approve", reportSignH.Approve)
+			deptG.POST("/:id/reject", reportSignH.Reject)
 		}
 
 		g = group.Group("/report-print")
@@ -207,8 +250,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", reportPrintH.Get)
 			g.PUT("/:id", reportPrintH.Update)
 			g.DELETE("/:id", reportPrintH.Delete)
-			g.POST("/:id/approve", reportPrintH.Approve)
-			g.POST("/:id/reject", reportPrintH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptBusiness))
+			deptG.POST("/:id/approve", reportPrintH.Approve)
+			deptG.POST("/:id/reject", reportPrintH.Reject)
 		}
 
 		g = group.Group("/project-archive")
@@ -219,8 +265,11 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 			g.GET("/:id", projectArchiveH.Get)
 			g.PUT("/:id", projectArchiveH.Update)
 			g.DELETE("/:id", projectArchiveH.Delete)
-			g.POST("/:id/approve", projectArchiveH.Approve)
-			g.POST("/:id/reject", projectArchiveH.Reject)
+
+			deptG := g.Group("")
+			deptG.Use(middleware.DeptScopeMiddleware(db, workflow.DeptReport))
+			deptG.POST("/:id/approve", projectArchiveH.Approve)
+			deptG.POST("/:id/reject", projectArchiveH.Reject)
 		}
 	}
 }

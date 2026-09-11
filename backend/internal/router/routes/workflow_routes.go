@@ -31,5 +31,7 @@ func RegisterWorkflowRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 
 		// Node definitions
 		group.GET("/nodes", wfH.GetNodeDefinitions)
+		// Progress by business object
+		group.GET("/progress/:businessType/:businessId", wfH.GetProgress)
 	}
 }

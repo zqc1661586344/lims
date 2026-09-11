@@ -32,6 +32,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import TaskList from '@/components/TaskList.vue'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import TaskProcessBar from '@/components/TaskProcessBar.vue'
 import ProcessTimeline from '@/components/ProcessTimeline.vue'
 import {
   getPendingTasksByDept,

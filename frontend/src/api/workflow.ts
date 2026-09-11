@@ -57,3 +57,29 @@ export function getProcessInstance(instanceId: number) {
 export function getNodeDefinitions() {
   return request.get('/workflow/nodes')
 }
+
+export interface ProgressNode {
+  code: string
+  name: string
+  dept_code: string
+  index: number
+  status: 'completed' | 'current' | 'pending' | 'rejected' | 'skipped'
+  can_reject: boolean
+  has_task: boolean
+  comment?: string
+}
+
+export interface WorkflowProgress {
+  instance_id: number
+  current_node: string
+  current_node_index: number
+  total_nodes: number
+  status: string
+  title: string
+  created_at: string
+  nodes: ProgressNode[]
+}
+
+export function getWorkflowProgress(businessType: string, businessId: number) {
+  return request.get(`/workflow/progress/${businessType}/${businessId}`)
+}

@@ -11,7 +11,16 @@
         </div>
       </template>
 
-      <el-table :data="items" stripe v-loading="loading">
+      <TaskProcessBar
+        :business-type="'task_order'"
+        :selected-id="selectedRow?.task_order_id ?? null"
+        :items="items"
+        :sticky="true"
+      />
+
+      <el-table :data="items" stripe v-loading="loading"
+          highlight-current-row
+          @row-click="handleRowClick">
         <el-table-column prop="task_order_id" label="委托ID" width="80" />
         <el-table-column label="采样单" min-width="200">
           <template #default="{ row }">
@@ -72,6 +81,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import TaskProcessBar from '@/components/TaskProcessBar.vue'
 import { getFieldSamplingList, getFieldSampling, createFieldSampling, updateFieldSampling, deleteFieldSampling, approveFieldSampling, rejectFieldSampling, listSamplingSheets } from '@/api/business'
 import type { FieldSamplingRecord, SamplingSheet } from '@/api/business'
 
@@ -83,6 +93,8 @@ interface FieldSamplingRow extends FieldSamplingRecord {
 
 const loading = ref(false)
 const items = ref<FieldSamplingRow[]>([])
+const selectedRow = ref(null)
+function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 
 onMounted(async () => { await loadData() })

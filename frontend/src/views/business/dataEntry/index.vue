@@ -10,7 +10,17 @@
           </div>
         </div>
       </template>
-      <el-table :data="items" stripe v-loading="loading">
+
+      <TaskProcessBar
+        :business-type="'task_order'"
+        :selected-id="selectedRow?.task_order_id ?? null"
+        :items="items"
+        :sticky="true"
+      />
+
+      <el-table :data="items" stripe v-loading="loading"
+          highlight-current-row
+          @row-click="handleRowClick">
         <el-table-column prop="task_order_id" label="委托ID" width="80" />
         <el-table-column prop="test_item_id" label="项目ID" width="80" />
         <el-table-column label="检验单" min-width="200">
@@ -64,6 +74,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import TaskProcessBar from '@/components/TaskProcessBar.vue'
 import {
   getDataEntryList,
   createDataEntry,
@@ -81,6 +92,8 @@ interface DataEntryRow extends DataEntry {
 
 const loading = ref(false)
 const items = ref<DataEntryRow[]>([])
+const selectedRow = ref(null)
+function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 
 onMounted(async () => { await loadData() })

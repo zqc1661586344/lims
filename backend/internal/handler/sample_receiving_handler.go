@@ -21,8 +21,6 @@ func NewSampleReceivingHandler(logger *zap.Logger, db *gorm.DB) *SampleReceiving
 	}
 }
 
-
-
 func (h *SampleReceivingHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
 		if id := c.Query("task_order_id"); id != "" {
@@ -113,12 +111,16 @@ func (h *SampleReceivingHandler) Delete(c *gin.Context) {
 		utils.NotFound(c, "样品接收记录不存在")
 		return
 	}
+	if err := h.svc.CheckNodeNotAdvanced(h.GetDB(c), "task_order", item.TaskOrderID, workflow.NodeSampleReceiving); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
 	if err := h.svc.CheckInstanceRunning(h.GetDB(c), "task_order", item.TaskOrderID); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
 	if err := h.GetDB(c).Delete(&item).Error; err != nil {
-		utils.InternalError(c, fmt.Sprintf("删除样品接收记录失败: %v", err))
+		utils.InternalError(c, fmt.Sprintf("删除样品接收失败: %v", err))
 		return
 	}
 	utils.Success(c, nil)

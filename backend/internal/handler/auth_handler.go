@@ -131,12 +131,16 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 }
 
 // loadUserPermissions queries all permission codes granted to the user via roles.
-// Admin users get an empty list (admin bypasses all permission checks).
+// Admin users receive EVERY permission code in the database so they can operate
+// across all business modules (DeptScope still limits them to their own department).
 func (h *AuthHandler) loadUserPermissions(userID uint, isAdmin bool) ([]string, error) {
 	if isAdmin {
-		return nil, nil
+		var codes []string
+		if err := h.db.Table("permissions").Select("code").Scan(&codes).Error; err != nil {
+			return nil, err
+		}
+		return codes, nil
 	}
-
 	var codes []string
 	err := h.db.Table("permissions").
 		Select("permissions.code").
