@@ -13,7 +13,7 @@ type TestItem struct {
 	Category   string  `gorm:"size:100" json:"category"`
 	Unit       string  `gorm:"size:50" json:"unit"`
 	Method     string  `gorm:"size:200" json:"method"`
-	StandardID *uint   `gorm:"index" json:"standard_id"`
+	StandardID *uint   `gorm:"index;constraint:OnDelete:SET NULL;references:test_standards(id)" json:"standard_id"`
 	Price      float64 `gorm:"type:decimal(10,2);default:0" json:"price"`
 	Status     int     `gorm:"default:1" json:"status"` // 1=active, 0=disabled
 

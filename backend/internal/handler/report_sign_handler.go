@@ -154,63 +154,54 @@ func (h *ReportSignHandler) Approve(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-
-	// 自动汇聚"报告审核签发单"（流程图 D15）：承接报告编制标题、编制/复核/审核意见及实验原始记录
-	reportNo, reportTitle, prepareOpinion, reviewOpinion, auditOpinion, rawRecords := h.aggregateSignSlip(c, req.TaskID)
-
-	rec := model.ReportSign{
-		TaskOrderID:    req.TaskID,
-		ReportNo:       reportNo,
-		ReportTitle:    reportTitle,
-		PrepareOpinion: prepareOpinion,
-		ReviewOpinion:  reviewOpinion,
-		AuditOpinion:   auditOpinion,
-		RawRecords:     rawRecords,
-		SignResult:     "通过",
-		SignComment:    req.SignComment,
-		SignerName:     req.SignerName,
-		SignDate:       req.SignDate,
-		SignStamp:      req.SignStamp,
-	}
+	effectiveResult := "通过"
 	if req.SignResult != "" {
-		rec.SignResult = req.SignResult
+		effectiveResult = req.SignResult
 	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+	if err := h.svc.ApproveWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
+		reportNo, reportTitle, prepareOpinion, reviewOpinion, auditOpinion, rawRecords := h.aggregateSignSlipWithTx(tx, req.TaskID)
+		rec := model.ReportSign{
+			TaskOrderID:    req.TaskID,
+			ReportNo:       reportNo,
+			ReportTitle:    reportTitle,
+			PrepareOpinion: prepareOpinion,
+			ReviewOpinion:  reviewOpinion,
+			AuditOpinion:   auditOpinion,
+			RawRecords:     rawRecords,
+			SignResult:     effectiveResult,
+			SignComment:    req.SignComment,
+			SignerName:     req.SignerName,
+			SignDate:       req.SignDate,
+			SignStamp:      req.SignStamp,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}); err != nil {
+		HandleWorkflowError(c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "报告签发通过"})
 }
 
-// aggregateSignSlip 汇聚生成"报告审核签发单"（流程图 D15）所需数据：
-// 报告编号/标题（取自报告编制）、编制/复核/审核各环节意见、以及实验原始记录（data_entries）。
-func (h *ReportSignHandler) aggregateSignSlip(c *gin.Context, taskOrderID uint) (reportNo, reportTitle, prepareOpinion, reviewOpinion, auditOpinion, rawRecords string) {
-	db := h.GetDB(c)
-
-	// 报告编制（D9）——报告编号、标题与编制意见
+func (h *ReportSignHandler) aggregateSignSlipWithTx(db *gorm.DB, taskOrderID uint) (reportNo, reportTitle, prepareOpinion, reviewOpinion, auditOpinion, rawRecords string) {
 	var prepare model.ReportPrepare
 	if err := db.Where("task_order_id = ?", taskOrderID).First(&prepare).Error; err == nil {
 		reportTitle = prepare.ReportTitle
-		reportNo = prepare.ReportNo // 报告编号（报告编制阶段赋号）
+		reportNo = prepare.ReportNo
 		prepareOpinion = prepare.PrepareOpinion
 	}
 
-	// 报告复核（D10）——复核意见
 	var review model.ReportReview
 	if err := db.Where("task_order_id = ?", taskOrderID).First(&review).Error; err == nil {
 		reviewOpinion = review.ReviewComment
 	}
 
-	// 报告审核（D11）——审核意见
 	var audit model.ReportAudit
 	if err := db.Where("task_order_id = ?", taskOrderID).First(&audit).Error; err == nil {
 		auditOpinion = audit.AuditComment
 	}
 
-	// 实验原始记录（D9/D12 中的"实验原始记录"部分，来自数据录入 data_entries）
 	var entries []model.DataEntry
 	if err := db.Where("task_order_id = ?", taskOrderID).Find(&entries).Error; err == nil && len(entries) > 0 {
 		type rawRec struct {
@@ -231,23 +222,29 @@ func (h *ReportSignHandler) aggregateSignSlip(c *gin.Context, taskOrderID uint) 
 
 func (h *ReportSignHandler) Reject(c *gin.Context) {
 	var req struct {
-		TaskID      uint   `json:"task_id" binding:"required"`
-		SignComment string `json:"sign_comment" binding:"required"`
+		TaskID       uint   `json:"task_id" binding:"required"`
+		SignComment  string `json:"sign_comment" binding:"required"`
+		RejectTarget string `json:"reject_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	rec := model.ReportSign{
-		TaskOrderID: req.TaskID,
-		SignResult:  "驳回",
-		SignComment: req.SignComment,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.SignComment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+	var opts []string
+	if req.RejectTarget != "" {
+		opts = append(opts, req.RejectTarget)
+	}
+	if err := h.svc.RejectWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.SignComment, func(tx *gorm.DB) error {
+		rec := model.ReportSign{
+			TaskOrderID: req.TaskID,
+			SignResult:  "驳回",
+			SignComment: req.SignComment,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}, opts...); err != nil {
+		HandleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "报告签发已驳回"})

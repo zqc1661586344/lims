@@ -131,16 +131,17 @@ func (h *QCTaskHandler) Approve(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	qc := model.QCTask{
-		TaskOrderID: req.TaskID,
-		QCType:      req.QCType,
-		QCDetails:   req.QCDetails,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+	if err := h.svc.ApproveWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
+		qc := model.QCTask{
+			TaskOrderID: req.TaskID,
+			QCType:      req.QCType,
+			QCDetails:   req.QCDetails,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc).Error
+	}); err != nil {
+		HandleWorkflowError(c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "质控任务通过"})
@@ -148,21 +149,25 @@ func (h *QCTaskHandler) Approve(c *gin.Context) {
 
 func (h *QCTaskHandler) Reject(c *gin.Context) {
 	var req struct {
-		TaskID  uint   `json:"task_id" binding:"required"`
-		Comment string `json:"comment" binding:"required"`
+		TaskID       uint   `json:"task_id" binding:"required"`
+		Comment      string `json:"comment" binding:"required"`
+		RejectTarget string `json:"reject_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	qc := model.QCTask{
-		TaskOrderID: req.TaskID,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+	var opts []string
+	if req.RejectTarget != "" {
+		opts = append(opts, req.RejectTarget)
+	}
+	if err := h.svc.RejectWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
+		qc := model.QCTask{TaskOrderID: req.TaskID}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc).Error
+	}, opts...); err != nil {
+		HandleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "质控任务已驳回"})

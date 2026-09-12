@@ -13,12 +13,13 @@ import (
 )
 
 type AuthHandler struct {
-	cfg *config.Config
-	db  *gorm.DB
+	cfg          *config.Config
+	db           *gorm.DB
+	loginLimiter *middleware.RateLimiter
 }
 
-func NewAuthHandler(cfg *config.Config, db *gorm.DB) *AuthHandler {
-	return &AuthHandler{cfg: cfg, db: db}
+func NewAuthHandler(cfg *config.Config, db *gorm.DB, loginLimiter *middleware.RateLimiter) *AuthHandler {
+	return &AuthHandler{cfg: cfg, db: db, loginLimiter: loginLimiter}
 }
 
 type LoginRequest struct {
@@ -30,6 +31,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请输入用户名和密码")
+		return
+	}
+
+	if h.loginLimiter != nil && !h.loginLimiter.AllowKey("user:"+req.Username) {
+		utils.Error(c, 429, "该账号尝试登录次数过多，请稍后再试")
 		return
 	}
 

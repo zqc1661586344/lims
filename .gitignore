@@ -9,6 +9,7 @@ Thumbs.db
 *.swo
 
 # Go
+backend/server
 backend/lims-server
 backend/tmp/
 
@@ -19,6 +20,9 @@ frontend/dist/
 # Env
 .env
 .env.local
+
+# Local dev config (sensitive)
+backend/config/config.dev.yaml
 
 # Docker volumes data (don't commit)
 postgres_data/

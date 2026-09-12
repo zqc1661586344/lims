@@ -3,6 +3,7 @@ package workflow
 import (
 	"errors"
 	"fmt"
+	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
 	"sync"
 
@@ -50,6 +51,14 @@ var sodCheckNodes = map[string]string{
 	NodeDataAudit:    NodeDataReview,
 	NodeReportReview: NodeReportPrepare,
 	NodeReportAudit:  NodeReportReview,
+}
+
+func ctxIsAdmin(tx *gorm.DB) bool {
+	if tx == nil || tx.Statement.Context == nil {
+		return false
+	}
+	v, _ := tx.Statement.Context.Value(middleware.CtxIsAdmin).(bool)
+	return v
 }
 
 // NewEngine creates a new workflow engine with the given GORM DB.
@@ -115,8 +124,12 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDe
 	if task.Status != TaskStatusPending {
 		return ErrTaskAlreadyCompleted
 	}
-	if task.AssigneeDeptID != userDeptID {
+	isAdmin := ctxIsAdmin(tx)
+	if !isAdmin && task.AssigneeDeptID != userDeptID {
 		return ErrDeptNotMatch
+	}
+	if !isAdmin && task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
+		return ErrAssigneeNotMatch
 	}
 	if err := e.checkSoD(tx, task.ProcessInstanceID, task.NodeCode, userID); err != nil {
 		return err
@@ -142,9 +155,14 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDe
 		return ErrUnknownNode
 	}
 
-	result := tx.Exec(`UPDATE process_tasks SET status=?, comment=?, updated_at=NOW(), version=version+1
-		WHERE id=? AND version=?`,
-		TaskStatusCompleted, comment, taskID, task.Version)
+	result := tx.Model(&model.ProcessTask{}).
+		Where("id = ? AND version = ?", taskID, task.Version).
+		Updates(map[string]interface{}{
+			"status":           TaskStatusCompleted,
+			"comment":          comment,
+			"assignee_user_id": gorm.Expr("COALESCE(assignee_user_id, ?)", userID),
+			"version":          gorm.Expr("version + 1"),
+		})
 	if result.Error != nil {
 		return fmt.Errorf("update task: %w", result.Error)
 	}
@@ -154,8 +172,11 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDe
 
 	nextNode := nodeDef.NextNode
 	if nextNode == "" {
-		if err := tx.Exec(`UPDATE process_instances SET status=?, current_node=?, updated_at=NOW()
-			WHERE id=?`, InstanceStatusCompleted, task.NodeCode, instance.ID).Error; err != nil {
+		if err := tx.Model(&model.ProcessInstance{}).Where("id = ?", instance.ID).
+			Updates(map[string]interface{}{
+				"status":       InstanceStatusCompleted,
+				"current_node": task.NodeCode,
+			}).Error; err != nil {
 			return fmt.Errorf("complete instance: %w", err)
 		}
 		if e.syncBiz != nil {
@@ -171,8 +192,8 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDe
 		if err := e.createTaskWithTx(tx, instance.ID, nextNode, nextDef.Name, 0); err != nil {
 			return err
 		}
-		if err := tx.Exec(`UPDATE process_instances SET current_node=?, updated_at=NOW()
-			WHERE id=?`, nextNode, instance.ID).Error; err != nil {
+		if err := tx.Model(&model.ProcessInstance{}).Where("id = ?", instance.ID).
+			Update("current_node", nextNode).Error; err != nil {
 			return fmt.Errorf("advance instance: %w", err)
 		}
 		if e.syncBiz != nil {
@@ -198,8 +219,12 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDep
 	if task.Status != TaskStatusPending {
 		return ErrTaskAlreadyCompleted
 	}
-	if task.AssigneeDeptID != userDeptID {
+	isAdmin := ctxIsAdmin(tx)
+	if !isAdmin && task.AssigneeDeptID != userDeptID {
 		return ErrDeptNotMatch
+	}
+	if !isAdmin && task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
+		return ErrAssigneeNotMatch
 	}
 	if err := e.checkSoD(tx, task.ProcessInstanceID, task.NodeCode, userID); err != nil {
 		return err
@@ -231,9 +256,14 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDep
 		return fmt.Errorf("get instance: %w", err)
 	}
 
-	result := tx.Exec(`UPDATE process_tasks SET status=?, comment=?, updated_at=NOW(), version=version+1
-		WHERE id=? AND version=?`,
-		TaskStatusRejected, comment, taskID, task.Version)
+	result := tx.Model(&model.ProcessTask{}).
+		Where("id = ? AND version = ?", taskID, task.Version).
+		Updates(map[string]interface{}{
+			"status":           TaskStatusRejected,
+			"comment":          comment,
+			"assignee_user_id": gorm.Expr("COALESCE(assignee_user_id, ?)", userID),
+			"version":          gorm.Expr("version + 1"),
+		})
 	if result.Error != nil {
 		return fmt.Errorf("update task rejected: %w", result.Error)
 	}
@@ -249,8 +279,8 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDep
 		return err
 	}
 
-	if err := tx.Exec(`UPDATE process_instances SET current_node=?, updated_at=NOW()
-		WHERE id=?`, rejectTarget, instance.ID).Error; err != nil {
+	if err := tx.Model(&model.ProcessInstance{}).Where("id = ?", instance.ID).
+		Update("current_node", rejectTarget).Error; err != nil {
 		return fmt.Errorf("revert instance node: %w", err)
 	}
 
@@ -367,7 +397,8 @@ func (e *Engine) AssignTaskWithTx(tx *gorm.DB, taskID uint, userID uint) error {
 	if task.Status != TaskStatusPending {
 		return ErrTaskAlreadyCompleted
 	}
-	if err := tx.Exec(`UPDATE process_tasks SET assignee_user_id=? WHERE id=?`, userID, taskID).Error; err != nil {
+	if err := tx.Model(&model.ProcessTask{}).Where("id = ?", taskID).
+		Update("assignee_user_id", userID).Error; err != nil {
 		return fmt.Errorf("assign task: %w", err)
 	}
 	return nil
@@ -464,14 +495,26 @@ func (e *Engine) GetInstance(instanceID uint) (map[string]interface{}, error) {
 // GetProgressByBusiness returns the workflow progress for a given business object.
 // Returns instance_id, current_node, overall status, and all 16 nodes with their
 // execution status (completed/current/pending/rejected).
-func (e *Engine) GetProgressByBusiness(businessType string, businessID uint) (map[string]interface{}, error) {
+//
+// Access control: admins and the instance creator always have access; other
+// users may view the progress if any task in this instance is assigned to
+// their department.
+func (e *Engine) GetProgressByBusiness(businessType string, businessID uint, userID uint, userDeptID uint, isAdmin bool) (map[string]interface{}, error) {
 	var instance model.ProcessInstance
 	if err := e.db.Where("business_type = ? AND business_id = ?", businessType, businessID).
-		First(&instance).Error; err != nil {
+		Order("id DESC").First(&instance).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, err
+	}
+
+	if !isAdmin && instance.CreatedBy != userID {
+		var count int64
+		e.db.Model(&model.ProcessTask{}).Where("process_instance_id = ? AND assignee_dept_id = ?", instance.ID, userDeptID).Count(&count)
+		if count == 0 {
+			return nil, ErrForbidden
+		}
 	}
 
 	nodeDefs := GetDefinition()
@@ -544,12 +587,14 @@ type taskRow struct {
 	Status            string
 	Version           int
 	AssigneeDeptID    uint
+	AssigneeUserID    uint
 }
 
 func (e *Engine) getTaskForUpdate(tx *gorm.DB, taskID uint) (*taskRow, error) {
 	var row taskRow
 	if err := tx.Raw(`SELECT id, process_instance_id, node_code, status, version,
-		COALESCE(assignee_dept_id, 0) as assignee_dept_id
+		COALESCE(assignee_dept_id, 0) as assignee_dept_id,
+		COALESCE(assignee_user_id, 0) as assignee_user_id
 		FROM process_tasks WHERE id=? FOR UPDATE`, taskID).Scan(&row).Error; err != nil {
 		return nil, fmt.Errorf("get task: %w", err)
 	}

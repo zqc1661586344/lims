@@ -73,6 +73,6 @@ func (s *WorkflowService) GetNodeDefinitions() []workflow.NodeDefinition {
 }
 
 // GetProgressByBusiness returns workflow progress for a business object.
-func (s *WorkflowService) GetProgressByBusiness(businessType string, businessID uint) (map[string]interface{}, error) {
-	return s.engine.GetProgressByBusiness(businessType, businessID)
+func (s *WorkflowService) GetProgressByBusiness(businessType string, businessID uint, userID uint, userDeptID uint, isAdmin bool) (map[string]interface{}, error) {
+	return s.engine.GetProgressByBusiness(businessType, businessID, userID, userDeptID, isAdmin)
 }

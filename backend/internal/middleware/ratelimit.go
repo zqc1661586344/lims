@@ -84,7 +84,7 @@ func (rl *RateLimiter) gc() {
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := c.ClientIP()
-		if !rl.getBucket(key).allow(rl.window, rl.max) {
+		if !rl.AllowKey(key) {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"code":    429,
 				"message": "too many login attempts, please try again later",
@@ -93,4 +93,8 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func (rl *RateLimiter) AllowKey(key string) bool {
+	return rl.getBucket(key).allow(rl.window, rl.max)
 }

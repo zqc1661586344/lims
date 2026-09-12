@@ -7,7 +7,7 @@ database:
   host: localhost
   port: 5432
   user: postgres
-  password: Zqc166879@
+  password: YOUR_DB_PASSWORD_HERE
   dbname: lims
   sslmode: disable
   max_idle_conns: 10
@@ -15,13 +15,13 @@ database:
   conn_max_lifetime: 30
 
 jwt:
-  secret: lims-jwt-secret-dev
+  secret: lims-jwt-secret-change-in-production
   expire_hour: 24
   issuer: lims-system
 
 minio:
   endpoint: localhost:9000
   access_key: lims
-  secret_key: lims123
+  secret_key: YOUR_MINIO_SECRET_HERE
   bucket_name: lims-files
   use_ssl: false

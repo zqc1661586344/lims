@@ -36,18 +36,20 @@ func (h *TaskAssignHandler) Get(c *gin.Context) {
 
 func (h *TaskAssignHandler) Create(c *gin.Context) {
 	var req struct {
-		TaskOrderID  uint   `json:"task_order_id" binding:"required"`
-		AssignedTo   string `json:"assigned_to"`
-		TestItemList string `json:"test_item_list"`
+		TaskOrderID    uint   `json:"task_order_id" binding:"required"`
+		AssignedTo     string `json:"assigned_to"`
+		AssigneeUserID *uint  `json:"assignee_user_id"`
+		TestItemList   string `json:"test_item_list"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
 	item := model.TaskAssign{
-		TaskOrderID:  req.TaskOrderID,
-		AssignedTo:   req.AssignedTo,
-		TestItemList: req.TestItemList,
+		TaskOrderID:    req.TaskOrderID,
+		AssignedTo:     req.AssignedTo,
+		AssigneeUserID: req.AssigneeUserID,
+		TestItemList:   req.TestItemList,
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建任务分配失败: %v", err))
@@ -72,8 +74,9 @@ func (h *TaskAssignHandler) Update(c *gin.Context) {
 		return
 	}
 	var req struct {
-		AssignedTo   string `json:"assigned_to"`
-		TestItemList string `json:"test_item_list"`
+		AssignedTo     string `json:"assigned_to"`
+		AssigneeUserID *uint  `json:"assignee_user_id"`
+		TestItemList   string `json:"test_item_list"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
@@ -82,6 +85,9 @@ func (h *TaskAssignHandler) Update(c *gin.Context) {
 	updates := map[string]interface{}{}
 	if req.AssignedTo != "" {
 		updates["assigned_to"] = req.AssignedTo
+	}
+	if req.AssigneeUserID != nil {
+		updates["assignee_user_id"] = *req.AssigneeUserID
 	}
 	if req.TestItemList != "" {
 		updates["test_item_list"] = req.TestItemList
@@ -122,47 +128,62 @@ func (h *TaskAssignHandler) Delete(c *gin.Context) {
 
 func (h *TaskAssignHandler) Approve(c *gin.Context) {
 	var req struct {
-		TaskID       uint   `json:"task_id" binding:"required"`
-		AssignedTo   string `json:"assigned_to"`
-		TestItemList string `json:"test_item_list"`
-		Comment      string `json:"comment"`
+		TaskID         uint   `json:"task_id" binding:"required"`
+		AssignedTo     string `json:"assigned_to"`
+		AssigneeUserID *uint  `json:"assignee_user_id"`
+		TestItemList   string `json:"test_item_list"`
+		Comment        string `json:"comment"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	rec := model.TaskAssign{
-		TaskOrderID:  req.TaskID,
-		AssignedTo:   req.AssignedTo,
-		TestItemList: req.TestItemList,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+	if err := h.svc.ApproveWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
+		rec := model.TaskAssign{
+			TaskOrderID:    req.TaskID,
+			AssignedTo:     req.AssignedTo,
+			AssigneeUserID: req.AssigneeUserID,
+			TestItemList:   req.TestItemList,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}); err != nil {
+		HandleWorkflowError(c, err, "审批失败")
 		return
+	}
+
+	if req.AssigneeUserID != nil && *req.AssigneeUserID > 0 {
+		if err := h.svc.AssignNextNodeTaskByOrder(req.TaskID, *req.AssigneeUserID); err != nil {
+			c.Writer.WriteString(`{"warning":"任务分配完成，但指派失败: ` + err.Error() + `"}`)
+		}
 	}
 	utils.Success(c, gin.H{"message": "任务分配通过"})
 }
 
 func (h *TaskAssignHandler) Reject(c *gin.Context) {
 	var req struct {
-		TaskID  uint   `json:"task_id" binding:"required"`
-		Comment string `json:"comment" binding:"required"`
+		TaskID       uint   `json:"task_id" binding:"required"`
+		Comment      string `json:"comment" binding:"required"`
+		RejectTarget string `json:"reject_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	rec := model.TaskAssign{
-		TaskOrderID: req.TaskID,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+	var opts []string
+	if req.RejectTarget != "" {
+		opts = append(opts, req.RejectTarget)
+	}
+	if err := h.svc.RejectWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
+		rec := model.TaskAssign{
+			TaskOrderID: req.TaskID,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}, opts...); err != nil {
+		HandleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "任务分配已驳回"})

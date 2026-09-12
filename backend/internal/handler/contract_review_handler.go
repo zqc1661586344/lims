@@ -140,21 +140,22 @@ func (h *ContractReviewHandler) Approve(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	// 保存或更新合同评审记录
-	review := model.ContractReview{
-		TaskOrderID:      req.TaskID, // 使用 task_id 关联的业务ID
-		ReviewResult:     "通过",
-		ReviewComment:    req.ReviewComment,
-		ContractFilePath: req.ContractFilePath,
-	}
-	if req.ReviewResult != "" {
-		review.ReviewResult = req.ReviewResult
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ReviewComment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+	var effectiveResult = "通过"
+	if req.ReviewResult != "" {
+		effectiveResult = req.ReviewResult
+	}
+	if err := h.svc.ApproveWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ReviewComment, func(tx *gorm.DB) error {
+		review := model.ContractReview{
+			TaskOrderID:      req.TaskID,
+			ReviewResult:     effectiveResult,
+			ReviewComment:    req.ReviewComment,
+			ContractFilePath: req.ContractFilePath,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review).Error
+	}); err != nil {
+		HandleWorkflowError(c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "合同评审通过"})
@@ -165,22 +166,27 @@ func (h *ContractReviewHandler) Reject(c *gin.Context) {
 	var req struct {
 		TaskID        uint   `json:"task_id" binding:"required"`
 		ReviewComment string `json:"review_comment" binding:"required"`
+		RejectTarget  string `json:"reject_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	// 保存驳回记录
-	review := model.ContractReview{
-		TaskOrderID:   req.TaskID,
-		ReviewResult:  "驳回",
-		ReviewComment: req.ReviewComment,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ReviewComment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+	var opts []string
+	if req.RejectTarget != "" {
+		opts = append(opts, req.RejectTarget)
+	}
+	if err := h.svc.RejectWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ReviewComment, func(tx *gorm.DB) error {
+		review := model.ContractReview{
+			TaskOrderID:   req.TaskID,
+			ReviewResult:  "驳回",
+			ReviewComment: req.ReviewComment,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review).Error
+	}, opts...); err != nil {
+		HandleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "合同评审已驳回"})

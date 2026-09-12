@@ -14,11 +14,11 @@ import (
 
 // RegisterSystemRoutes registers RBAC-related routes.
 func RegisterSystemRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	auth := handler.NewAuthHandler(cfg, db)
+	loginLimiter := middleware.NewRateLimiter(time.Minute, 10)
+	auth := handler.NewAuthHandler(cfg, db, loginLimiter)
 
 	// Public auth routes (no token required)
 	authGroup := r.Group("/auth")
-	loginLimiter := middleware.NewRateLimiter(time.Minute, 10)
 	{
 		authGroup.POST("/login", loginLimiter.Middleware(), auth.Login)
 	}

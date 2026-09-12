@@ -87,24 +87,30 @@ func (s *BusinessService) ApproveTask(taskID uint, userID uint, userDeptID uint,
 	})
 }
 
-func (s *BusinessService) RejectTask(taskID uint, userID uint, userDeptID uint, comment string, rejectTarget ...string) error {
+func (s *BusinessService) RejectTask(taskID uint, userID uint, userDeptID uint, comment string, rejectTargetOverride ...string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		ctx, err := s.resolveTaskContext(tx, taskID)
 		if err != nil {
 			return err
 		}
-		nodeMap := workflow.BuildNodeMap()
-		rejectTarget := nodeMap[ctx.NodeCode].RejectTarget
-		if rejectTarget == "" {
-			rejectTarget = workflow.FindPreviousNode(ctx.NodeCode)
+
+		effectiveTarget := ""
+		if len(rejectTargetOverride) > 0 && rejectTargetOverride[0] != "" {
+			effectiveTarget = rejectTargetOverride[0]
+		} else {
+			nodeMap := workflow.BuildNodeMap()
+			effectiveTarget = nodeMap[ctx.NodeCode].RejectTarget
+			if effectiveTarget == "" {
+				effectiveTarget = workflow.FindPreviousNode(ctx.NodeCode)
+			}
 		}
 
-		if err := s.engine.RejectTaskWithTx(tx, taskID, userID, userDeptID, comment); err != nil {
+		if err := s.engine.RejectTaskWithTx(tx, taskID, userID, userDeptID, comment, rejectTargetOverride...); err != nil {
 			return err
 		}
 
-		if rejectTarget != "" && rejectTarget != workflow.NodeTaskCreate {
-			if err := s.ensureBusinessRecord(tx, rejectTarget, ctx.BusinessID); err != nil {
+		if effectiveTarget != "" && effectiveTarget != workflow.NodeTaskCreate {
+			if err := s.ensureBusinessRecord(tx, effectiveTarget, ctx.BusinessID); err != nil {
 				return err
 			}
 		}
@@ -166,7 +172,7 @@ func (s *BusinessService) ApproveWithBusiness(orderID uint, userID uint, userDep
 	})
 }
 
-func (s *BusinessService) RejectWithBusiness(orderID uint, userID uint, userDeptID uint, comment string, save func(tx *gorm.DB) error) error {
+func (s *BusinessService) RejectWithBusiness(orderID uint, userID uint, userDeptID uint, comment string, save func(tx *gorm.DB) error, rejectTargetOverride ...string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if save != nil {
 			if err := save(tx); err != nil {
@@ -185,17 +191,23 @@ func (s *BusinessService) RejectWithBusiness(orderID uint, userID uint, userDept
 		if err != nil {
 			return err
 		}
-		nodeMap := workflow.BuildNodeMap()
-		rejectTarget := nodeMap[ctx.NodeCode].RejectTarget
-		if rejectTarget == "" {
-			rejectTarget = workflow.FindPreviousNode(ctx.NodeCode)
+
+		effectiveTarget := ""
+		if len(rejectTargetOverride) > 0 && rejectTargetOverride[0] != "" {
+			effectiveTarget = rejectTargetOverride[0]
+		} else {
+			nodeMap := workflow.BuildNodeMap()
+			effectiveTarget = nodeMap[ctx.NodeCode].RejectTarget
+			if effectiveTarget == "" {
+				effectiveTarget = workflow.FindPreviousNode(ctx.NodeCode)
+			}
 		}
 
-		if err := s.engine.RejectTaskWithTx(tx, taskID, userID, userDeptID, comment); err != nil {
+		if err := s.engine.RejectTaskWithTx(tx, taskID, userID, userDeptID, comment, rejectTargetOverride...); err != nil {
 			return err
 		}
-		if rejectTarget != "" && rejectTarget != workflow.NodeTaskCreate {
-			return s.ensureBusinessRecord(tx, rejectTarget, ctx.BusinessID)
+		if effectiveTarget != "" && effectiveTarget != workflow.NodeTaskCreate {
+			return s.ensureBusinessRecord(tx, effectiveTarget, ctx.BusinessID)
 		}
 		return nil
 	})
@@ -212,6 +224,20 @@ func (s *BusinessService) CheckInstanceRunning(tx *gorm.DB, businessType string,
 		return fmt.Errorf("该记录关联运行中的流程，无法删除")
 	}
 	return nil
+}
+
+func (s *BusinessService) AssignNextNodeTaskByOrder(orderID uint, assigneeUserID uint) error {
+	if assigneeUserID == 0 {
+		return nil
+	}
+	taskID, err := s.engine.GetPendingTaskIDByOrder(orderID)
+	if err != nil {
+		return err
+	}
+	if taskID == 0 {
+		return nil
+	}
+	return s.engine.AssignTask(taskID, assigneeUserID)
 }
 
 func (s *BusinessService) CheckNodeNotAdvanced(tx *gorm.DB, businessType string, businessID uint, nodeCode string) error {

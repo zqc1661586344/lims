@@ -161,37 +161,35 @@ func (h *ProjectArchiveHandler) Approve(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	// 若未手动指定归档文件清单，则自动汇聚 D1–D13 全部环节文档（流程图 D14 = 以上所有文档）
-	archiveFiles := req.ArchiveFiles
-	if archiveFiles == "" {
-		archiveFiles = h.aggregateArchiveFiles(c, req.TaskID)
-	}
-	rec := model.ProjectArchive{
-		TaskOrderID:     req.TaskID,
-		ArchiveNo:       req.ArchiveNo,
-		ArchiveLocation: req.ArchiveLocation,
-		ArchiveDate:     req.ArchiveDate,
-		ArchiveFiles:    archiveFiles,
-		ArchiveComment:  req.ArchiveComment,
-		RetentionPeriod: req.RetentionPeriod,
-	}
-	if rec.RetentionPeriod == 0 {
-		rec.RetentionPeriod = 36
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+	if err := h.svc.ApproveWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
+		archiveFiles := req.ArchiveFiles
+		if archiveFiles == "" {
+			archiveFiles = h.aggregateArchiveFilesWithTx(tx, req.TaskID)
+		}
+		retentionPeriod := req.RetentionPeriod
+		if retentionPeriod == 0 {
+			retentionPeriod = 36
+		}
+		rec := model.ProjectArchive{
+			TaskOrderID:     req.TaskID,
+			ArchiveNo:       req.ArchiveNo,
+			ArchiveLocation: req.ArchiveLocation,
+			ArchiveDate:     req.ArchiveDate,
+			ArchiveFiles:    archiveFiles,
+			ArchiveComment:  req.ArchiveComment,
+			RetentionPeriod: retentionPeriod,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}); err != nil {
+		HandleWorkflowError(c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "项目归档通过"})
 }
 
-// aggregateArchiveFiles 自动汇聚该委托单 D1–D13 全部环节文档，生成归档文件清单（流程图 D14 = 以上所有文档）。
-// 返回 JSON 数组字符串：[{stage, doc_name, ref}]
-func (h *ProjectArchiveHandler) aggregateArchiveFiles(c *gin.Context, taskOrderID uint) string {
-	db := h.GetDB(c)
+func (h *ProjectArchiveHandler) aggregateArchiveFilesWithTx(db *gorm.DB, taskOrderID uint) string {
 	type docItem struct {
 		Stage   string `json:"stage"`
 		DocName string `json:"doc_name"`
@@ -199,25 +197,21 @@ func (h *ProjectArchiveHandler) aggregateArchiveFiles(c *gin.Context, taskOrderI
 	}
 	docs := make([]docItem, 0)
 
-	// D1 委托任务单
 	var order model.TaskOrder
 	if err := db.First(&order, taskOrderID).Error; err == nil {
 		docs = append(docs, docItem{Stage: "D1", DocName: "委托任务单", Ref: order.OrderNo})
 	}
 
-	// D2 检测合同/协议
 	var contract model.ContractReview
 	if err := db.Where("task_order_id = ?", taskOrderID).First(&contract).Error; err == nil && contract.ContractFilePath != "" {
 		docs = append(docs, docItem{Stage: "D2", DocName: "检测合同/协议", Ref: contract.ContractFilePath})
 	}
 
-	// D3 委托检测方案（质控任务）
 	var qc model.QCTask
 	if err := db.Where("task_order_id = ?", taskOrderID).First(&qc).Error; err == nil && qc.QCDetails != "" {
 		docs = append(docs, docItem{Stage: "D3", DocName: "委托检测方案(含质控)", Ref: qc.QCDetails})
 	}
 
-	// D4 现场采样记录及设备校准记录
 	var field model.FieldSamplingRecord
 	if err := db.Where("task_order_id = ?", taskOrderID).First(&field).Error; err == nil {
 		if field.SamplingRecordFilePath != "" {
@@ -228,13 +222,11 @@ func (h *ProjectArchiveHandler) aggregateArchiveFiles(c *gin.Context, taskOrderI
 		}
 	}
 
-	// D5 样品接收记录
 	var sample model.SampleReceiving
 	if err := db.Where("task_order_id = ?", taskOrderID).First(&sample).Error; err == nil && sample.ReceivingRecordPath != "" {
 		docs = append(docs, docItem{Stage: "D5", DocName: "样品接收记录", Ref: sample.ReceivingRecordPath})
 	}
 
-	// D6/D7/D8 实验原始记录（数据录入）
 	var entries []model.DataEntry
 	if err := db.Where("task_order_id = ?", taskOrderID).Find(&entries).Error; err == nil {
 		for i := range entries {
@@ -242,7 +234,6 @@ func (h *ProjectArchiveHandler) aggregateArchiveFiles(c *gin.Context, taskOrderI
 		}
 	}
 
-	// D9–D12 报告及审核签发单（报告编制/复核/审核/签发）
 	var prepare model.ReportPrepare
 	if err := db.Where("task_order_id = ?", taskOrderID).First(&prepare).Error; err == nil && prepare.ReportFile != "" {
 		docs = append(docs, docItem{Stage: "D9", DocName: "报告+" + prepare.ReportTitle, Ref: prepare.ReportFile})
@@ -261,7 +252,6 @@ func (h *ProjectArchiveHandler) aggregateArchiveFiles(c *gin.Context, taskOrderI
 		docs = append(docs, docItem{Stage: "D12/D15", DocName: "报告审核签发单", Ref: sign.SignStamp})
 	}
 
-	// D13 报告发放记录
 	var print model.ReportPrint
 	if err := db.Where("task_order_id = ?", taskOrderID).First(&print).Error; err == nil {
 		docs = append(docs, docItem{Stage: "D13", DocName: "报告发放记录", Ref: fmt.Sprintf("份数:%d 领取:%s", print.PrintCount, print.RecipientName)})
@@ -280,20 +270,26 @@ func (h *ProjectArchiveHandler) Reject(c *gin.Context) {
 	var req struct {
 		TaskID         uint   `json:"task_id" binding:"required"`
 		ArchiveComment string `json:"archive_comment" binding:"required"`
+		RejectTarget   string `json:"reject_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	rec := model.ProjectArchive{
-		TaskOrderID:    req.TaskID,
-		ArchiveComment: req.ArchiveComment,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ArchiveComment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+	var opts []string
+	if req.RejectTarget != "" {
+		opts = append(opts, req.RejectTarget)
+	}
+	if err := h.svc.RejectWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.ArchiveComment, func(tx *gorm.DB) error {
+		rec := model.ProjectArchive{
+			TaskOrderID:    req.TaskID,
+			ArchiveComment: req.ArchiveComment,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}, opts...); err != nil {
+		HandleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "项目归档已驳回"})

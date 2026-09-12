@@ -167,27 +167,30 @@ func (h *ReportPrintHandler) Approve(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	rec := model.ReportPrint{
-		TaskOrderID:    req.TaskID,
-		PrintCount:     req.PrintCount,
-		PrintResult:    "通过",
-		PrintComment:   req.PrintComment,
-		RecipientName:  req.RecipientName,
-		RecipientDate:  req.RecipientDate,
-		DeliveryMethod: req.DeliveryMethod,
-		TrackingNo:     req.TrackingNo,
-	}
+	effectiveResult := "通过"
 	if req.PrintResult != "" {
-		rec.PrintResult = req.PrintResult
+		effectiveResult = req.PrintResult
 	}
-	if rec.PrintCount == 0 {
-		rec.PrintCount = 1
+	printCount := req.PrintCount
+	if printCount == 0 {
+		printCount = 1
 	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+	if err := h.svc.ApproveWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
+		rec := model.ReportPrint{
+			TaskOrderID:    req.TaskID,
+			PrintCount:     printCount,
+			PrintResult:    effectiveResult,
+			PrintComment:   req.PrintComment,
+			RecipientName:  req.RecipientName,
+			RecipientDate:  req.RecipientDate,
+			DeliveryMethod: req.DeliveryMethod,
+			TrackingNo:     req.TrackingNo,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}); err != nil {
+		HandleWorkflowError(c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "报告打印发放通过"})
@@ -197,21 +200,27 @@ func (h *ReportPrintHandler) Reject(c *gin.Context) {
 	var req struct {
 		TaskID       uint   `json:"task_id" binding:"required"`
 		PrintComment string `json:"print_comment" binding:"required"`
+		RejectTarget string `json:"reject_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	rec := model.ReportPrint{
-		TaskOrderID:  req.TaskID,
-		PrintResult:  "驳回",
-		PrintComment: req.PrintComment,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.PrintComment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+	var opts []string
+	if req.RejectTarget != "" {
+		opts = append(opts, req.RejectTarget)
+	}
+	if err := h.svc.RejectWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.PrintComment, func(tx *gorm.DB) error {
+		rec := model.ReportPrint{
+			TaskOrderID:  req.TaskID,
+			PrintResult:  "驳回",
+			PrintComment: req.PrintComment,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}, opts...); err != nil {
+		HandleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "报告打印发放已驳回"})

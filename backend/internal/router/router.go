@@ -33,6 +33,7 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 	}
 
 	r := gin.New()
+	r.SetTrustedProxies(nil)
 
 	// Global middleware
 	r.Use(middleware.Recovery(logger))
@@ -88,6 +89,9 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 
 func autoMigrate(logger *zap.Logger, db *gorm.DB) {
 	logger.Info("running AutoMigrate to create/update tables")
+
+	preMigrateCleanup(db, logger)
+
 	db.AutoMigrate(
 		&model.User{},
 		&model.Dept{},
@@ -123,4 +127,53 @@ func autoMigrate(logger *zap.Logger, db *gorm.DB) {
 		&model.SamplingSheetTemplate{},
 		&model.SamplingSheet{},
 	)
+}
+
+func preMigrateCleanup(db *gorm.DB, logger *zap.Logger) {
+	cleanups := []struct {
+		name string
+		sql  string
+	}{
+		{"process_tasks → process_instances",
+			`DELETE FROM process_tasks WHERE process_instance_id NOT IN (SELECT id FROM process_instances)`},
+		{"contract_reviews → task_orders",
+			`DELETE FROM contract_reviews WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"qc_tasks → task_orders",
+			`DELETE FROM qc_tasks WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"sampling_schedules → task_orders",
+			`DELETE FROM sampling_schedules WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"field_sampling_records → task_orders",
+			`DELETE FROM field_sampling_records WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"sample_receivings → task_orders",
+			`DELETE FROM sample_receivings WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"task_assigns → task_orders",
+			`DELETE FROM task_assigns WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"data_entries → task_orders",
+			`DELETE FROM data_entries WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"data_reviews → task_orders",
+			`DELETE FROM data_reviews WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"data_audits → task_orders",
+			`DELETE FROM data_audits WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"report_prepares → task_orders",
+			`DELETE FROM report_prepares WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"report_reviews → task_orders",
+			`DELETE FROM report_reviews WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"report_audits → task_orders",
+			`DELETE FROM report_audits WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"report_signs → task_orders",
+			`DELETE FROM report_signs WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"report_prints → task_orders",
+			`DELETE FROM report_prints WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+		{"project_archives → task_orders",
+			`DELETE FROM project_archives WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
+	}
+
+	for _, c := range cleanups {
+		result := db.Exec(c.sql)
+		if result.RowsAffected > 0 {
+			logger.Warn("Cleaned orphan rows before FK constraint",
+				zap.String("relation", c.name),
+				zap.Int64("rows_removed", result.RowsAffected))
+		}
+	}
 }

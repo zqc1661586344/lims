@@ -137,17 +137,18 @@ func (h *FieldSamplingRecordHandler) Approve(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	rec := model.FieldSamplingRecord{
-		TaskOrderID:            req.TaskID,
-		SamplePhotos:           req.SamplePhotos,
-		EquipmentCalRecords:    req.EquipmentCalRecords,
-		SamplingRecordFilePath: req.SamplingRecordFilePath,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+	if err := h.svc.ApproveWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
+		rec := model.FieldSamplingRecord{
+			TaskOrderID:            req.TaskID,
+			SamplePhotos:           req.SamplePhotos,
+			EquipmentCalRecords:    req.EquipmentCalRecords,
+			SamplingRecordFilePath: req.SamplingRecordFilePath,
+		}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}); err != nil {
+		HandleWorkflowError(c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "现场采样通过"})
@@ -155,21 +156,25 @@ func (h *FieldSamplingRecordHandler) Approve(c *gin.Context) {
 
 func (h *FieldSamplingRecordHandler) Reject(c *gin.Context) {
 	var req struct {
-		TaskID  uint   `json:"task_id" binding:"required"`
-		Comment string `json:"comment" binding:"required"`
+		TaskID       uint   `json:"task_id" binding:"required"`
+		Comment      string `json:"comment" binding:"required"`
+		RejectTarget string `json:"reject_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
-	rec := model.FieldSamplingRecord{
-		TaskOrderID: req.TaskID,
-	}
-	h.GetDB(c).Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec)
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+	var opts []string
+	if req.RejectTarget != "" {
+		opts = append(opts, req.RejectTarget)
+	}
+	if err := h.svc.RejectWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
+		rec := model.FieldSamplingRecord{TaskOrderID: req.TaskID}
+		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+	}, opts...); err != nil {
+		HandleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "现场采样已驳回"})

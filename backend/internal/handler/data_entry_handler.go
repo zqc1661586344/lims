@@ -145,7 +145,7 @@ func (h *DataEntryHandler) Approve(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("审批失败: %v", err))
+		HandleWorkflowError(c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "数据录入通过"})
@@ -153,16 +153,21 @@ func (h *DataEntryHandler) Approve(c *gin.Context) {
 
 func (h *DataEntryHandler) Reject(c *gin.Context) {
 	var req struct {
-		TaskID  uint   `json:"task_id" binding:"required"`
-		Comment string `json:"comment" binding:"required"`
+		TaskID       uint   `json:"task_id" binding:"required"`
+		Comment      string `json:"comment" binding:"required"`
+		RejectTarget string `json:"reject_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, fmt.Sprintf("参数错误: %v", err))
 		return
 	}
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		utils.InternalError(c, fmt.Sprintf("驳回失败: %v", err))
+	var opts []string
+	if req.RejectTarget != "" {
+		opts = append(opts, req.RejectTarget)
+	}
+	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, opts...); err != nil {
+		HandleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "数据录入已驳回"})

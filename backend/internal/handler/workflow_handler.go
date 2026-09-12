@@ -127,7 +127,7 @@ func (h *WorkflowHandler) ApproveTask(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTask(id, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		h.handleWorkflowError(c, err, "审批失败")
+		HandleWorkflowError(c, err, "审批失败")
 		return
 	}
 	utils.Success(c, nil)
@@ -142,7 +142,8 @@ func (h *WorkflowHandler) RejectTask(c *gin.Context) {
 	}
 
 	var req struct {
-		Comment string `json:"comment"`
+		Comment      string `json:"comment"`
+		RejectTarget string `json:"reject_target"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		req.Comment = ""
@@ -153,20 +154,26 @@ func (h *WorkflowHandler) RejectTask(c *gin.Context) {
 	}
 
 	userID := middleware.GetUserID(c)
-	if err := h.svc.RejectTask(id, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		h.handleWorkflowError(c, err, "驳回失败")
+	var opts []string
+	if req.RejectTarget != "" {
+		opts = append(opts, req.RejectTarget)
+	}
+	if err := h.svc.RejectTask(id, userID, middleware.GetDeptIDVal(c), req.Comment, opts...); err != nil {
+		HandleWorkflowError(c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, nil)
 }
 
-// handleWorkflowError maps workflow engine sentinel errors to the correct
+// HandleWorkflowError maps workflow engine sentinel errors to the correct
 // HTTP status code so the frontend can distinguish authz (403), conflict
 // (409), bad request (400), and server errors (500).
-func (h *WorkflowHandler) handleWorkflowError(c *gin.Context, err error, action string) {
+func HandleWorkflowError(c *gin.Context, err error, action string) {
 	switch {
 	case errors.Is(err, workflow.ErrDeptNotMatch):
 		utils.Forbidden(c, fmt.Sprintf("%s: 当前用户部门无权操作该任务", action))
+	case errors.Is(err, workflow.ErrAssigneeNotMatch):
+		utils.Forbidden(c, fmt.Sprintf("%s: 该任务已分配给其他人员", action))
 	case errors.Is(err, workflow.ErrSoDViolation):
 		utils.Forbidden(c, fmt.Sprintf("%s: 职责分离违规——审核/复核人不能是前序节点的操作人", action))
 	case errors.Is(err, workflow.ErrOptimisticLock):
@@ -175,6 +182,8 @@ func (h *WorkflowHandler) handleWorkflowError(c *gin.Context, err error, action 
 		utils.BadRequest(c, fmt.Sprintf("%s: 任务已完成或已驳回", action))
 	case errors.Is(err, workflow.ErrInstanceNotRunning):
 		utils.BadRequest(c, fmt.Sprintf("%s: 流程实例已终止", action))
+	case errors.Is(err, workflow.ErrForbidden):
+		utils.Forbidden(c, fmt.Sprintf("%s: 无权访问此流程", action))
 	default:
 		utils.InternalError(c, fmt.Sprintf("%s: %v", action, err))
 	}
@@ -195,8 +204,15 @@ func (h *WorkflowHandler) GetProgress(c *gin.Context) {
 		utils.BadRequest(c, "无效的业务ID")
 		return
 	}
-	progress, err := h.svc.GetProgressByBusiness(businessType, businessID)
+	userID := middleware.GetUserID(c)
+	userDeptID := middleware.GetDeptIDVal(c)
+	isAdmin := middleware.IsAdmin(c)
+	progress, err := h.svc.GetProgressByBusiness(businessType, businessID, userID, userDeptID, isAdmin)
 	if err != nil {
+		if errors.Is(err, workflow.ErrForbidden) {
+			utils.Forbidden(c, "无权查看该流程进度")
+			return
+		}
 		utils.InternalError(c, "查询流程进度失败")
 		return
 	}
