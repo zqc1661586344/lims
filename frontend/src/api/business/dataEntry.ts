@@ -40,6 +40,7 @@ export function approveDataEntry(id: number, data: {
 export function rejectDataEntry(id: number, data: {
   task_id: number
   comment: string
+  reject_target?: string
 }) {
   return request.post(`/business/data-entry/${id}/reject`, data)
 }

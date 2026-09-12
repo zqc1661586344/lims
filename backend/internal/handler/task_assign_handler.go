@@ -147,16 +147,18 @@ func (h *TaskAssignHandler) Approve(c *gin.Context) {
 			AssigneeUserID: req.AssigneeUserID,
 			TestItemList:   req.TestItemList,
 		}
-		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+		if err := tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error; err != nil {
+			return err
+		}
+		if req.AssigneeUserID != nil && *req.AssigneeUserID > 0 {
+			if err := h.svc.AssignNextNodeTaskByOrderTx(tx, req.TaskID, *req.AssigneeUserID); err != nil {
+				return fmt.Errorf("任务分配完成，但指派失败: %w", err)
+			}
+		}
+		return nil
 	}); err != nil {
 		HandleWorkflowError(c, err, "审批失败")
 		return
-	}
-
-	if req.AssigneeUserID != nil && *req.AssigneeUserID > 0 {
-		if err := h.svc.AssignNextNodeTaskByOrder(req.TaskID, *req.AssigneeUserID); err != nil {
-			c.Writer.WriteString(`{"warning":"任务分配完成，但指派失败: ` + err.Error() + `"}`)
-		}
 	}
 	utils.Success(c, gin.H{"message": "任务分配通过"})
 }

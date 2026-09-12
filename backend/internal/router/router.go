@@ -3,7 +3,6 @@ package router
 import (
 	"lims-backend/internal/config"
 	"lims-backend/internal/middleware"
-	"lims-backend/internal/model"
 	"lims-backend/internal/router/routes"
 	"strings"
 
@@ -21,7 +20,7 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 
 	// Auto-migrate database tables (skip in production to avoid unintended schema changes)
 	if cfg.Env != "production" {
-		autoMigrate(logger, db)
+		RunAutoMigrate(logger, db)
 	} else {
 		logger.Warn("skipping AutoMigrate in production environment")
 	}
@@ -33,7 +32,7 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 	}
 
 	r := gin.New()
-	r.SetTrustedProxies(nil)
+	r.SetTrustedProxies(cfg.Server.TrustedProxies)
 
 	// Global middleware
 	r.Use(middleware.Recovery(logger))
@@ -87,93 +86,89 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 	return r
 }
 
-func autoMigrate(logger *zap.Logger, db *gorm.DB) {
-	logger.Info("running AutoMigrate to create/update tables")
-
-	preMigrateCleanup(db, logger)
-
-	db.AutoMigrate(
-		&model.User{},
-		&model.Dept{},
-		&model.Role{},
-		&model.Permission{},
-		&model.UserRole{},
-		&model.RolePermission{},
-		&model.AuditLog{},
-		&model.TestItem{},
-		&model.TestStandard{},
-		&model.Equipment{},
-		&model.Reagent{},
-		&model.ProcessInstance{},
-		&model.ProcessTask{},
-		&model.TaskOrder{},
-		&model.ContractReview{},
-		&model.QCTask{},
-		&model.SamplingSchedule{},
-		&model.FieldSamplingRecord{},
-		&model.SampleReceiving{},
-		&model.TaskAssign{},
-		&model.DataEntry{},
-		&model.DataReview{},
-		&model.DataAudit{},
-		&model.ReportPrepare{},
-		&model.ReportReview{},
-		&model.ReportAudit{},
-		&model.ReportSign{},
-		&model.ReportPrint{},
-		&model.ProjectArchive{},
-		&model.LabSheetTemplate{},
-		&model.LabSheet{},
-		&model.SamplingSheetTemplate{},
-		&model.SamplingSheet{},
-	)
-}
-
-func preMigrateCleanup(db *gorm.DB, logger *zap.Logger) {
-	cleanups := []struct {
-		name string
-		sql  string
-	}{
+func preMigrateCleanup(db *gorm.DB, logger *zap.Logger, delete bool) {
+	type orphanRel struct {
+		name    string
+		countQ  string
+		deleteQ string
+	}
+	rels := []orphanRel{
 		{"process_tasks → process_instances",
+			`SELECT COUNT(*) FROM process_tasks WHERE process_instance_id NOT IN (SELECT id FROM process_instances)`,
 			`DELETE FROM process_tasks WHERE process_instance_id NOT IN (SELECT id FROM process_instances)`},
 		{"contract_reviews → task_orders",
+			`SELECT COUNT(*) FROM contract_reviews WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM contract_reviews WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"qc_tasks → task_orders",
+			`SELECT COUNT(*) FROM qc_tasks WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM qc_tasks WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"sampling_schedules → task_orders",
+			`SELECT COUNT(*) FROM sampling_schedules WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM sampling_schedules WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"field_sampling_records → task_orders",
+			`SELECT COUNT(*) FROM field_sampling_records WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM field_sampling_records WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"sample_receivings → task_orders",
+			`SELECT COUNT(*) FROM sample_receivings WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM sample_receivings WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"task_assigns → task_orders",
+			`SELECT COUNT(*) FROM task_assigns WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM task_assigns WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"data_entries → task_orders",
+			`SELECT COUNT(*) FROM data_entries WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM data_entries WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"data_reviews → task_orders",
+			`SELECT COUNT(*) FROM data_reviews WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM data_reviews WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"data_audits → task_orders",
+			`SELECT COUNT(*) FROM data_audits WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM data_audits WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"report_prepares → task_orders",
+			`SELECT COUNT(*) FROM report_prepares WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM report_prepares WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"report_reviews → task_orders",
+			`SELECT COUNT(*) FROM report_reviews WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM report_reviews WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"report_audits → task_orders",
+			`SELECT COUNT(*) FROM report_audits WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM report_audits WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"report_signs → task_orders",
+			`SELECT COUNT(*) FROM report_signs WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM report_signs WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"report_prints → task_orders",
+			`SELECT COUNT(*) FROM report_prints WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM report_prints WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 		{"project_archives → task_orders",
+			`SELECT COUNT(*) FROM project_archives WHERE task_order_id NOT IN (SELECT id FROM task_orders)`,
 			`DELETE FROM project_archives WHERE task_order_id NOT IN (SELECT id FROM task_orders)`},
 	}
 
-	for _, c := range cleanups {
-		result := db.Exec(c.sql)
-		if result.RowsAffected > 0 {
-			logger.Warn("Cleaned orphan rows before FK constraint",
-				zap.String("relation", c.name),
-				zap.Int64("rows_removed", result.RowsAffected))
+	anyOrphan := false
+	for _, r := range rels {
+		var cnt int64
+		if err := db.Raw(r.countQ).Scan(&cnt).Error; err != nil {
+			logger.Debug("orphan count query skipped (table may not exist)",
+				zap.String("relation", r.name), zap.Error(err))
+			continue
 		}
+		if cnt == 0 {
+			continue
+		}
+		anyOrphan = true
+		if delete {
+			result := db.Exec(r.deleteQ)
+			logger.Warn("Cleaned orphan rows before FK constraint",
+				zap.String("relation", r.name),
+				zap.Int64("rows_removed", result.RowsAffected))
+		} else {
+			logger.Error("Orphan rows detected but NOT deleted (LIMS_STRICT_CLEANUP=false)",
+				zap.String("relation", r.name),
+				zap.Int64("orphan_count", cnt),
+				zap.String("hint", "run LIMS_STRICT_CLEANUP=true once to clean, or repair data manually"))
+		}
+	}
+
+	if anyOrphan && !delete {
+		logger.Warn("AutoMigrate will add FK constraints that may FAIL if orphan rows still exist — resolve manually")
 	}
 }

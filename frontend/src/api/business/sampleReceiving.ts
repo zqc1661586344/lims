@@ -43,6 +43,7 @@ export function approveSampleReceiving(id: number, data: {
 export function rejectSampleReceiving(id: number, data: {
   task_id: number
   comment: string
+  reject_target?: string
 }) {
   return request.post(`/business/sample-receiving/${id}/reject`, data)
 }

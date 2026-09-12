@@ -74,56 +74,66 @@ func seedRoles(db *gorm.DB, logger *zap.Logger) {
 		codes []string
 	}{
 		{
-			role:  model.Role{Name: "超级管理员", Code: "super_admin", Remark: "拥有全部业务权限"},
+			role:  model.Role{Name: "超级管理员", Code: "super_admin", Remark: "拥有全部业务权限（不受部门约束）"},
 			codes: []string{"*"},
 		},
 		{
-			role: model.Role{Name: "实验室技术员", Code: "lab_technician", Remark: "负责数据录入与质控执行"},
+			role: model.Role{Name: "业务经理", Code: "business_manager", Remark: "业务室：委托单创建、报告发放"},
 			codes: []string{
-				"business:qc-task", "business:task-assign", "business:data-entry",
+				"business:task-order", "business:report-print",
 			},
 		},
 		{
-			role: model.Role{Name: "采样员", Code: "sampler", Remark: "负责采样计划与现场采样"},
+			role:  model.Role{Name: "合同评审员", Code: "contract_reviewer", Remark: "技术室：合同评审"},
+			codes: []string{"business:contract-review"},
+		},
+		{
+			role:  model.Role{Name: "授权签字人", Code: "authorized_signer", Remark: "技术室：报告签发"},
+			codes: []string{"business:report-sign"},
+		},
+		{
+			role:  model.Role{Name: "质控任务员", Code: "qc_staff", Remark: "质控室：质控任务分派"},
+			codes: []string{"business:qc-task"},
+		},
+		{
+			role:  model.Role{Name: "报告审核人", Code: "report_auditor", Remark: "质控室：报告审核"},
+			codes: []string{"business:report-audit"},
+		},
+		{
+			role: model.Role{Name: "采样员", Code: "sampler", Remark: "现场室：采样计划与现场采样"},
 			codes: []string{
 				"business:sampling-schedule", "business:field-sampling",
 			},
 		},
 		{
-			role:  model.Role{Name: "样品管理员", Code: "sample_manager", Remark: "负责样品接收"},
+			role:  model.Role{Name: "样品管理员", Code: "sample_manager", Remark: "样品室：样品接收"},
 			codes: []string{"business:sample-receiving"},
 		},
 		{
-			role:  model.Role{Name: "数据复核人", Code: "data_reviewer", Remark: "负责数据复核（与录入人职责分离）"},
+			role: model.Role{Name: "实验室技术员", Code: "lab_technician", Remark: "实验室：任务分配、数据录入"},
+			codes: []string{
+				"business:task-assign", "business:data-entry",
+			},
+		},
+		{
+			role:  model.Role{Name: "数据复核人", Code: "data_reviewer", Remark: "实验室：数据复核（与录入人职责分离）"},
 			codes: []string{"business:data-review"},
 		},
 		{
-			role:  model.Role{Name: "数据审核人", Code: "data_auditor", Remark: "负责数据审核（与复核人职责分离）"},
+			role:  model.Role{Name: "数据审核人", Code: "data_auditor", Remark: "实验室：数据审核（与复核人职责分离）"},
 			codes: []string{"business:data-audit"},
 		},
 		{
-			role:  model.Role{Name: "报告编制人", Code: "report_preparer", Remark: "负责报告编制"},
-			codes: []string{"business:report-prepare"},
-		},
-		{
-			role:  model.Role{Name: "报告复核人", Code: "report_reviewer", Remark: "负责报告复核（与编制人职责分离）"},
+			role:  model.Role{Name: "报告复核人", Code: "report_reviewer", Remark: "实验室：报告复核（与编制人职责分离）"},
 			codes: []string{"business:report-review"},
 		},
 		{
-			role:  model.Role{Name: "报告审核人", Code: "report_auditor", Remark: "负责报告审核（与复核人职责分离）"},
-			codes: []string{"business:report-audit"},
+			role:  model.Role{Name: "报告编制人", Code: "report_preparer", Remark: "报告室：报告编制"},
+			codes: []string{"business:report-prepare"},
 		},
 		{
-			role:  model.Role{Name: "授权签字人", Code: "authorized_signer", Remark: "负责报告签发"},
-			codes: []string{"business:report-sign"},
-		},
-		{
-			role:  model.Role{Name: "档案管理员", Code: "archive_manager", Remark: "负责报告打印发放与项目归档"},
-			codes: []string{"business:report-print", "business:project-archive"},
-		},
-		{
-			role:  model.Role{Name: "业务经理", Code: "business_manager", Remark: "负责委托单与合同评审"},
-			codes: []string{"business:task-order", "business:contract-review"},
+			role:  model.Role{Name: "档案管理员", Code: "archive_manager", Remark: "报告室：项目归档"},
+			codes: []string{"business:project-archive"},
 		},
 	}
 

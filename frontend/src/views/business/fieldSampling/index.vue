@@ -154,7 +154,7 @@ const currentRow = ref<FieldSamplingRecord | null>(null)
 function openApprove(row: FieldSamplingRecord) { currentRow.value = row; approvalRef.value?.open('approve') }
 function openReject(row: FieldSamplingRecord) { currentRow.value = row; approvalRef.value?.open('reject') }
 
-async function handleApprovalSubmit(data: { action: string; comment: string }) {
+async function handleApprovalSubmit(data: { action: string; comment: string; reject_target?: string }) {
   if (!currentRow.value) return
   const id = currentRow.value.id
   const taskId = currentRow.value.task_order_id
@@ -162,7 +162,7 @@ async function handleApprovalSubmit(data: { action: string; comment: string }) {
     await approveFieldSampling(id, { task_id: taskId, comment: data.comment })
     ElMessage.success('采样通过，流程已推进')
   } else {
-    await rejectFieldSampling(id, { task_id: taskId, comment: data.comment })
+    await rejectFieldSampling(id, { task_id: taskId, comment: data.comment, reject_target: data.reject_target })
     ElMessage.success('已驳回')
   }
   await loadData()

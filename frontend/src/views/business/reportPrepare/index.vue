@@ -187,7 +187,7 @@ function openReject(row: ReportPrepare) {
   approvalRef.value?.open('reject')
 }
 
-async function handleApprovalSubmit(data: { action: string; comment: string }) {
+async function handleApprovalSubmit(data: { action: string; comment: string; reject_target?: string }) {
   if (!currentRow.value) return
   const id = currentRow.value.id
   const taskId = currentRow.value.task_order_id
@@ -195,7 +195,7 @@ async function handleApprovalSubmit(data: { action: string; comment: string }) {
     await approveReportPrepare(id, { task_id: taskId, report_no: approveExtra.report_no, prepare_opinion: approveExtra.prepare_opinion, report_title: approveExtra.report_title, report_content: approveExtra.report_content, report_file: approveExtra.report_file, attachments: approveExtra.attachments })
     ElMessage.success('编制通过，流程已推进')
   } else {
-    await rejectReportPrepare(id, { task_id: taskId, comment: data.comment })
+    await rejectReportPrepare(id, { task_id: taskId, comment: data.comment, reject_target: data.reject_target })
     ElMessage.success('已驳回')
   }
   await loadData()

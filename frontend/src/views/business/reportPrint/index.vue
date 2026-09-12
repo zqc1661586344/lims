@@ -192,7 +192,7 @@ function openReject(row: ReportPrint) {
   approvalRef.value?.open('reject')
 }
 
-async function handleApprovalSubmit(data: { action: string; comment: string }) {
+async function handleApprovalSubmit(data: { action: string; comment: string; reject_target?: string }) {
   if (!currentRow.value) return
   const id = currentRow.value.id
   const taskId = currentRow.value.task_order_id
@@ -200,7 +200,7 @@ async function handleApprovalSubmit(data: { action: string; comment: string }) {
     await approveReportPrint(id, { task_id: taskId, print_count: approveExtra.print_count, print_result: approveExtra.print_result, delivery_method: approveExtra.delivery_method, recipient_name: approveExtra.recipient_name, recipient_date: approveExtra.recipient_date, tracking_no: approveExtra.tracking_no, print_comment: data.comment })
     ElMessage.success('打印发放通过，流程已推进')
   } else {
-    await rejectReportPrint(id, { task_id: taskId, comment: data.comment })
+    await rejectReportPrint(id, { task_id: taskId, comment: data.comment, reject_target: data.reject_target })
     ElMessage.success('已驳回')
   }
   await loadData()

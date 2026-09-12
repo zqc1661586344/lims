@@ -149,7 +149,7 @@ function openReject(row: DataAudit) {
   approvalRef.value?.open('reject')
 }
 
-async function handleApprovalSubmit(data: { action: string; comment: string }) {
+async function handleApprovalSubmit(data: { action: string; comment: string; reject_target?: string }) {
   if (!currentRow.value) return
   const id = currentRow.value.id
   const taskId = currentRow.value.task_order_id
@@ -157,7 +157,7 @@ async function handleApprovalSubmit(data: { action: string; comment: string }) {
     await approveDataAudit(id, { task_id: taskId, audit_result: approveExtra.audit_result, audit_comment: data.comment, issue_list: approveExtra.issue_list })
     ElMessage.success('审核通过，流程已推进')
   } else {
-    await rejectDataAudit(id, { task_id: taskId, comment: data.comment })
+    await rejectDataAudit(id, { task_id: taskId, comment: data.comment, reject_target: data.reject_target })
     ElMessage.success('已驳回')
   }
   await loadData()

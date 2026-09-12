@@ -45,7 +45,7 @@ export function getPendingTasksByUser() {
 export function approveTask(id: number, data: { comment?: string }) {
   return request.post(`/workflow/tasks/${id}/approve`, data)
 }
-export function rejectTask(id: number, data: { comment: string }) {
+export function rejectTask(id: number, data: { comment: string; reject_target?: string }) {
   return request.post(`/workflow/tasks/${id}/reject`, data)
 }
 export function getProcessHistory(instanceId: number) {

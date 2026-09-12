@@ -180,7 +180,7 @@ function openReject(row: ProjectArchive) {
   approvalRef.value?.open('reject')
 }
 
-async function handleApprovalSubmit(data: { action: string; comment: string }) {
+async function handleApprovalSubmit(data: { action: string; comment: string; reject_target?: string }) {
   if (!currentRow.value) return
   const id = currentRow.value.id
   const taskId = currentRow.value.task_order_id
@@ -188,7 +188,7 @@ async function handleApprovalSubmit(data: { action: string; comment: string }) {
     await approveProjectArchive(id, { task_id: taskId, archive_no: approveExtra.archive_no, archive_location: approveExtra.archive_location, archive_date: approveExtra.archive_date, archive_files: '', archive_comment: data.comment, retention_period: approveExtra.retention_period })
     ElMessage.success('项目归档完成，流程已结束')
   } else {
-    await rejectProjectArchive(id, { task_id: taskId, comment: data.comment })
+    await rejectProjectArchive(id, { task_id: taskId, comment: data.comment, reject_target: data.reject_target })
     ElMessage.success('已驳回')
   }
   await loadData()

@@ -44,13 +44,14 @@ var (
 )
 
 // sodCheckNodes maps nodes that enforce Segregation of Duties (CNAS
-// requirement: reviewer != performer) to their immediately-preceding
-// node whose assignee must differ from the current operator.
-var sodCheckNodes = map[string]string{
-	NodeDataReview:   NodeDataEntry,
-	NodeDataAudit:    NodeDataReview,
-	NodeReportReview: NodeReportPrepare,
-	NodeReportAudit:  NodeReportReview,
+// requirement: reviewer != performer) to the set of earlier nodes
+// (in the same audit chain) whose assignees must differ from the
+// current operator.
+var sodCheckNodes = map[string][]string{
+	NodeDataReview:   {NodeDataEntry},
+	NodeDataAudit:    {NodeDataEntry, NodeDataReview},
+	NodeReportReview: {NodeReportPrepare},
+	NodeReportAudit:  {NodeReportPrepare, NodeReportReview},
 }
 
 func ctxIsAdmin(tx *gorm.DB) bool {
@@ -605,19 +606,21 @@ func (e *Engine) getTaskForUpdate(tx *gorm.DB, taskID uint) (*taskRow, error) {
 }
 
 func (e *Engine) checkSoD(tx *gorm.DB, instanceID uint, nodeCode string, userID uint) error {
-	prevNode, ok := sodCheckNodes[nodeCode]
+	prevNodes, ok := sodCheckNodes[nodeCode]
 	if !ok {
 		return nil
 	}
 
-	var prevAssignee *uint
-	if err := tx.Raw(`SELECT assignee_user_id FROM process_tasks
-		WHERE process_instance_id = ? AND node_code = ? AND status = 'completed'
-		ORDER BY id DESC LIMIT 1`, instanceID, prevNode).Scan(&prevAssignee).Error; err != nil {
+	var prevAssignees []uint
+	if err := tx.Raw(`SELECT DISTINCT assignee_user_id FROM process_tasks
+		WHERE process_instance_id = ? AND node_code IN ? AND status = 'completed'
+		AND assignee_user_id IS NOT NULL`, instanceID, prevNodes).Scan(&prevAssignees).Error; err != nil {
 		return fmt.Errorf("sod check: %w", err)
 	}
-	if prevAssignee != nil && *prevAssignee == userID {
-		return ErrSoDViolation
+	for _, a := range prevAssignees {
+		if a == userID {
+			return ErrSoDViolation
+		}
 	}
 	return nil
 }
@@ -646,6 +649,11 @@ func (e *Engine) createTaskWithTx(tx *gorm.DB, instanceID uint, nodeCode, nodeNa
 	if len(assigneeUserID) > 0 && assigneeUserID[0] != 0 {
 		uid := assigneeUserID[0]
 		userIDPtr = &uid
+	} else if def.RoleHint != "" {
+		if autoUID := e.resolveAssigneeForNode(tx, resolvedDeptID, def.RoleHint); autoUID != 0 {
+			uid := autoUID
+			userIDPtr = &uid
+		}
 	}
 	return tx.Create(&model.ProcessTask{
 		ProcessInstanceID: instanceID,
@@ -680,4 +688,19 @@ func (e *Engine) queryTasks(query string, args ...interface{}) ([]map[string]int
 		results = append(results, row)
 	}
 	return results, nil
+}
+
+func (e *Engine) resolveAssigneeForNode(tx *gorm.DB, deptID uint, roleCode string) uint {
+	var userID uint
+	err := tx.Raw(`
+		SELECT u.id
+		FROM users u
+		JOIN user_roles ur ON ur.user_id = u.id
+		JOIN roles r ON r.id = ur.role_id
+		WHERE u.dept_id = ? AND r.code = ? AND u.status = 1
+		LIMIT 1`, deptID, roleCode).Scan(&userID).Error
+	if err != nil || userID == 0 {
+		return 0
+	}
+	return userID
 }

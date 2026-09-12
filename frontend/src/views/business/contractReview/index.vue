@@ -155,7 +155,7 @@ function openReject(row: ContractReview) {
   approvalRef.value?.open('reject')
 }
 
-async function handleApprovalSubmit(data: { action: string; comment: string }) {
+async function handleApprovalSubmit(data: { action: string; comment: string; reject_target?: string }) {
   if (!currentRow.value) return
   const id = currentRow.value.id
   const taskId = currentRow.value.task_order_id
@@ -163,7 +163,7 @@ async function handleApprovalSubmit(data: { action: string; comment: string }) {
     await approveContractReview(id, { task_id: taskId, review_comment: data.comment, contract_file_path: approveExtra.contract_file_path })
     ElMessage.success('评审通过，流程已推进')
   } else {
-    await rejectContractReview(id, { task_id: taskId, review_comment: data.comment })
+    await rejectContractReview(id, { task_id: taskId, review_comment: data.comment, reject_target: data.reject_target })
     ElMessage.success('已驳回')
   }
   await loadData()

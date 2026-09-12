@@ -105,7 +105,7 @@ async function handleApprovalSubmit(data: { action: string; comment: string; rej
     await approveTask(currentTaskId, { comment: data.comment })
     ElMessage.success('审批通过')
   } else {
-    await rejectTask(currentTaskId, { comment: data.comment })
+    await rejectTask(currentTaskId, { comment: data.comment, reject_target: data.reject_target })
     ElMessage.success('已驳回')
   }
   await loadTasks()

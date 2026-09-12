@@ -43,6 +43,7 @@ export function approveFieldSampling(id: number, data: {
 export function rejectFieldSampling(id: number, data: {
   task_id: number
   comment: string
+  reject_target?: string
 }) {
   return request.post(`/business/field-sampling/${id}/reject`, data)
 }

@@ -51,6 +51,7 @@ export function approveProjectArchive(id: number, data: {
 export function rejectProjectArchive(id: number, data: {
   task_id: number
   comment: string
+  reject_target?: string
 }) {
   return request.post(`/business/project-archive/${id}/reject`, data)
 }

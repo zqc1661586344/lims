@@ -240,6 +240,20 @@ func (s *BusinessService) AssignNextNodeTaskByOrder(orderID uint, assigneeUserID
 	return s.engine.AssignTask(taskID, assigneeUserID)
 }
 
+func (s *BusinessService) AssignNextNodeTaskByOrderTx(tx *gorm.DB, orderID uint, assigneeUserID uint) error {
+	if assigneeUserID == 0 {
+		return nil
+	}
+	taskID, err := s.engine.GetPendingTaskIDByOrderTx(tx, orderID)
+	if err != nil {
+		return err
+	}
+	if taskID == 0 {
+		return nil
+	}
+	return s.engine.AssignTaskWithTx(tx, taskID, assigneeUserID)
+}
+
 func (s *BusinessService) CheckNodeNotAdvanced(tx *gorm.DB, businessType string, businessID uint, nodeCode string) error {
 	var currentNode string
 	if err := tx.Raw(`SELECT current_node FROM process_instances

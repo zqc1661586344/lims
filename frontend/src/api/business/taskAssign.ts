@@ -40,6 +40,7 @@ export function approveTaskAssign(id: number, data: {
 export function rejectTaskAssign(id: number, data: {
   task_id: number
   comment: string
+  reject_target?: string
 }) {
   return request.post(`/business/task-assign/${id}/reject`, data)
 }

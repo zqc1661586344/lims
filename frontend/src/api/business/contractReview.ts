@@ -42,6 +42,7 @@ export function approveContractReview(id: number, data: {
 export function rejectContractReview(id: number, data: {
   task_id: number
   review_comment: string
+  reject_target?: string
 }) {
   return request.post(`/business/contract-reviews/${id}/reject`, data)
 }

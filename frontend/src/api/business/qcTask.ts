@@ -40,6 +40,7 @@ export function approveQCTask(id: number, data: {
 export function rejectQCTask(id: number, data: {
   task_id: number
   comment: string
+  reject_target?: string
 }) {
   return request.post(`/business/qc-tasks/${id}/reject`, data)
 }

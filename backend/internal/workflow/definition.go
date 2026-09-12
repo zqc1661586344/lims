@@ -1,23 +1,22 @@
 package workflow
 
-// NodeDefinition defines a single node in the workflow.
 type NodeDefinition struct {
-	Code        string   // unique node code
-	Name        string   // human-readable name
-	DeptCode    string   // responsible department code
-	CanReject   bool     // whether this node can reject (return to previous)
-	RejectTarget string  // node to return to on rejection (empty = previous node)
-	NextNode    string   // the next node after approval (empty = terminal)
+	Code         string
+	Name         string
+	DeptCode     string
+	RoleHint     string
+	CanReject    bool
+	RejectTarget string
+	NextNode     string
 }
 
-// GetDefinition returns the full 16-node workflow definition.
-// The order matters — nodes are indexed by position in the slice.
 func GetDefinition() []NodeDefinition {
 	return []NodeDefinition{
 		{
 			Code:      NodeTaskCreate,
 			Name:      "任务创建",
 			DeptCode:  DeptBusiness,
+			RoleHint:  "business_manager",
 			CanReject: false,
 			NextNode:  NodeContractReview,
 		},
@@ -25,6 +24,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeContractReview,
 			Name:         "合同评审",
 			DeptCode:     DeptTech,
+			RoleHint:     "contract_reviewer",
 			CanReject:    true,
 			RejectTarget: NodeTaskCreate,
 			NextNode:     NodeQCTask,
@@ -32,7 +32,8 @@ func GetDefinition() []NodeDefinition {
 		{
 			Code:         NodeQCTask,
 			Name:         "质控任务",
-			DeptCode:     DeptQC, // 质控室（与业务流程图一致）
+			DeptCode:     DeptQC,
+			RoleHint:     "qc_staff",
 			CanReject:    true,
 			RejectTarget: NodeContractReview,
 			NextNode:     NodeSamplingSchedule,
@@ -41,6 +42,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeSamplingSchedule,
 			Name:         "采样调度",
 			DeptCode:     DeptField,
+			RoleHint:     "sampler",
 			CanReject:    true,
 			RejectTarget: NodeQCTask,
 			NextNode:     NodeFieldSampling,
@@ -49,6 +51,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeFieldSampling,
 			Name:         "现场采样",
 			DeptCode:     DeptField,
+			RoleHint:     "sampler",
 			CanReject:    true,
 			RejectTarget: NodeSamplingSchedule,
 			NextNode:     NodeSampleReceiving,
@@ -57,6 +60,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeSampleReceiving,
 			Name:         "样品接收",
 			DeptCode:     DeptSample,
+			RoleHint:     "sample_manager",
 			CanReject:    true,
 			RejectTarget: NodeFieldSampling,
 			NextNode:     NodeTaskAssign,
@@ -65,6 +69,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeTaskAssign,
 			Name:         "任务分配",
 			DeptCode:     DeptLab,
+			RoleHint:     "lab_technician",
 			CanReject:    true,
 			RejectTarget: NodeSampleReceiving,
 			NextNode:     NodeDataEntry,
@@ -73,6 +78,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeDataEntry,
 			Name:         "数据录入",
 			DeptCode:     DeptLab,
+			RoleHint:     "lab_technician",
 			CanReject:    true,
 			RejectTarget: NodeTaskAssign,
 			NextNode:     NodeDataReview,
@@ -81,6 +87,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeDataReview,
 			Name:         "数据复核",
 			DeptCode:     DeptLab,
+			RoleHint:     "data_reviewer",
 			CanReject:    true,
 			RejectTarget: NodeDataEntry,
 			NextNode:     NodeDataAudit,
@@ -89,6 +96,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeDataAudit,
 			Name:         "数据审核",
 			DeptCode:     DeptLab,
+			RoleHint:     "data_auditor",
 			CanReject:    true,
 			RejectTarget: NodeDataReview,
 			NextNode:     NodeReportPrepare,
@@ -97,6 +105,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeReportPrepare,
 			Name:         "报告编制",
 			DeptCode:     DeptReport,
+			RoleHint:     "report_preparer",
 			CanReject:    true,
 			RejectTarget: NodeDataAudit,
 			NextNode:     NodeReportReview,
@@ -105,6 +114,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeReportReview,
 			Name:         "报告复核",
 			DeptCode:     DeptLab,
+			RoleHint:     "report_reviewer",
 			CanReject:    true,
 			RejectTarget: NodeReportPrepare,
 			NextNode:     NodeReportAudit,
@@ -113,6 +123,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeReportAudit,
 			Name:         "报告审核",
 			DeptCode:     DeptQC,
+			RoleHint:     "report_auditor",
 			CanReject:    true,
 			RejectTarget: NodeReportReview,
 			NextNode:     NodeReportSign,
@@ -121,6 +132,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeReportSign,
 			Name:         "报告签发",
 			DeptCode:     DeptTech,
+			RoleHint:     "authorized_signer",
 			CanReject:    true,
 			RejectTarget: NodeReportAudit,
 			NextNode:     NodeReportPrint,
@@ -129,6 +141,7 @@ func GetDefinition() []NodeDefinition {
 			Code:         NodeReportPrint,
 			Name:         "报告发放",
 			DeptCode:     DeptBusiness,
+			RoleHint:     "business_manager",
 			CanReject:    true,
 			RejectTarget: NodeReportSign,
 			NextNode:     NodeProjectArchive,
@@ -137,13 +150,12 @@ func GetDefinition() []NodeDefinition {
 			Code:      NodeProjectArchive,
 			Name:      "项目归档",
 			DeptCode:  DeptReport,
+			RoleHint:  "archive_manager",
 			CanReject: false,
-			// NextNode is empty — terminal node
 		},
 	}
 }
 
-// BuildNodeMap returns a map of node code -> NodeDefinition for fast lookup.
 func BuildNodeMap() map[string]NodeDefinition {
 	index := make(map[string]NodeDefinition, 16)
 	for _, n := range GetDefinition() {
@@ -152,8 +164,6 @@ func BuildNodeMap() map[string]NodeDefinition {
 	return index
 }
 
-// FindPreviousNode returns the node code immediately before the given node.
-// Returns empty string if the node is the first one.
 func FindPreviousNode(code string) string {
 	defs := GetDefinition()
 	for i, n := range defs {
@@ -167,7 +177,6 @@ func FindPreviousNode(code string) string {
 	return ""
 }
 
-// GetNodeIndex returns the position (0-based) of a node in the workflow.
 func GetNodeIndex(code string) int {
 	for i, n := range GetDefinition() {
 		if n.Code == code {

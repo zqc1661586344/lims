@@ -2,6 +2,7 @@ env: "development"
 
 server:
   port: 8080
+  trusted_proxies: []
 
 database:
   host: localhost

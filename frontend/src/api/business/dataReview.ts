@@ -42,6 +42,7 @@ export function approveDataReview(id: number, data: {
 export function rejectDataReview(id: number, data: {
   task_id: number
   comment: string
+  reject_target?: string
 }) {
   return request.post(`/business/data-review/${id}/reject`, data)
 }

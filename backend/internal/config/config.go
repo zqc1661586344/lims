@@ -24,7 +24,8 @@ type CORSConfig struct {
 
 // ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
-	Port int `mapstructure:"port"`
+	Port           int      `mapstructure:"port"`
+	TrustedProxies []string `mapstructure:"trusted_proxies"`
 }
 
 // DatabaseConfig holds PostgreSQL connection configuration.

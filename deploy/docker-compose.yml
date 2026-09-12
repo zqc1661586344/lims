@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -41,6 +40,26 @@ services:
       timeout: 5s
       retries: 3
 
+  migrate:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: lims-migrate
+    environment:
+      LIMS_ENV: "production"
+      LIMS_DATABASE_HOST: postgres
+      LIMS_DATABASE_PORT: 5432
+      LIMS_DATABASE_USER: lims
+      LIMS_DATABASE_PASSWORD: lims123
+      LIMS_DATABASE_DBNAME: lims
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["./lims-migrate"]
+    networks:
+      - lims-net
+    restart: "no"
+
   backend:
     build:
       context: ../backend
@@ -63,6 +82,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks:
       - lims-net
 
