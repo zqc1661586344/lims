@@ -161,7 +161,7 @@ func (h *ReportPrepareHandler) Approve(c *gin.Context) {
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
 	}); err != nil {
-		HandleWorkflowError(c, err, "审批失败")
+		HandleWorkflowError(h.Logger, c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "报告编制通过"})
@@ -189,7 +189,7 @@ func (h *ReportPrepareHandler) Reject(c *gin.Context) {
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
 	}, opts...); err != nil {
-		HandleWorkflowError(c, err, "驳回失败")
+		HandleWorkflowError(h.Logger, c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "报告编制已驳回"})

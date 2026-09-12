@@ -152,12 +152,12 @@ func (h *TaskAssignHandler) Approve(c *gin.Context) {
 		}
 		if req.AssigneeUserID != nil && *req.AssigneeUserID > 0 {
 			if err := h.svc.AssignNextNodeTaskByOrderTx(tx, req.TaskID, *req.AssigneeUserID); err != nil {
-				return fmt.Errorf("任务分配完成，但指派失败: %w", err)
+				return fmt.Errorf("指派下一节点任务失败: %w", err)
 			}
 		}
 		return nil
 	}); err != nil {
-		HandleWorkflowError(c, err, "审批失败")
+		HandleWorkflowError(h.Logger, c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "任务分配通过"})
@@ -185,7 +185,7 @@ func (h *TaskAssignHandler) Reject(c *gin.Context) {
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
 	}, opts...); err != nil {
-		HandleWorkflowError(c, err, "驳回失败")
+		HandleWorkflowError(h.Logger, c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "任务分配已驳回"})

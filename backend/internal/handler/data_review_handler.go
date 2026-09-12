@@ -152,7 +152,7 @@ func (h *DataReviewHandler) Approve(c *gin.Context) {
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review).Error
 	}); err != nil {
-		HandleWorkflowError(c, err, "审批失败")
+		HandleWorkflowError(h.Logger, c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "数据复核通过"})
@@ -182,7 +182,7 @@ func (h *DataReviewHandler) Reject(c *gin.Context) {
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review).Error
 	}, opts...); err != nil {
-		HandleWorkflowError(c, err, "驳回失败")
+		HandleWorkflowError(h.Logger, c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "数据复核已驳回"})

@@ -13,6 +13,7 @@ func Run(db *gorm.DB, logger *zap.Logger) {
 	seedDepts(db, logger)
 	seedPermissions(db, logger)
 	seedRoles(db, logger)
+	seedUsers(db, logger)
 	seedAdminUser(db, logger)
 	seedAdminRoleBindings(db, logger)
 }
@@ -163,6 +164,81 @@ func seedRoles(db *gorm.DB, logger *zap.Logger) {
 		if len(perms) > 0 {
 			db.Model(&role).Association("Permissions").Replace(perms)
 		}
+	}
+}
+
+// seedUsers creates one user per (department, role) pairing so that
+// resolveAssigneeForNode can actually find someone for every workflow node.
+// Passwords are "<username>123" — change in production.
+func seedUsers(db *gorm.DB, logger *zap.Logger) {
+	type userSeed struct {
+		username string
+		realName string
+		deptCode string
+		roleCode string
+	}
+
+	seeds := []userSeed{
+		{"biz_mgr", "王经理", "dept_business", "business_manager"},
+		{"tech_reviewer", "李评审", "dept_tech", "contract_reviewer"},
+		{"signer", "张授权", "dept_tech", "authorized_signer"},
+		{"qc_staff", "赵质控", "dept_qc", "qc_staff"},
+		{"qc_auditor", "陈审核", "dept_qc", "report_auditor"},
+		{"sampler", "刘采样", "dept_field", "sampler"},
+		{"sample_mgr", "周样品", "dept_sample", "sample_manager"},
+		{"lab_tech", "孙技术员", "dept_lab", "lab_technician"},
+		{"data_reviewer", "吴复核", "dept_lab", "data_reviewer"},
+		{"data_auditor", "郑审核", "dept_lab", "data_auditor"},
+		{"report_reviewer", "钱复核", "dept_lab", "report_reviewer"},
+		{"report_preparer", "冯编制", "dept_report", "report_preparer"},
+		{"archivist", "褚档案", "dept_report", "archive_manager"},
+	}
+
+	for _, s := range seeds {
+		var existing model.User
+		if err := db.Where("username = ?", s.username).First(&existing).Error; err == nil {
+			continue
+		}
+
+		var dept model.Dept
+		if err := db.Where("code = ?", s.deptCode).First(&dept).Error; err != nil {
+			logger.Warn("seedUsers: dept not found, skipping",
+				zap.String("dept_code", s.deptCode))
+			continue
+		}
+
+		var role model.Role
+		if err := db.Where("code = ?", s.roleCode).First(&role).Error; err != nil {
+			logger.Warn("seedUsers: role not found, skipping",
+				zap.String("role_code", s.roleCode))
+			continue
+		}
+
+		hashed, err := utils.HashPassword(s.username + "123")
+		if err != nil {
+			logger.Error("seedUsers: password hash failed",
+				zap.String("username", s.username), zap.Error(err))
+			continue
+		}
+
+		user := model.User{
+			Username: s.username,
+			Password: hashed,
+			RealName: s.realName,
+			DeptID:   &dept.ID,
+			Status:   1,
+			IsAdmin:  false,
+		}
+		if err := db.Create(&user).Error; err != nil {
+			logger.Error("seedUsers: create user failed",
+				zap.String("username", s.username), zap.Error(err))
+			continue
+		}
+		db.Create(&model.UserRole{UserID: user.ID, RoleID: role.ID})
+		logger.Info("Seeded user",
+			zap.String("username", s.username),
+			zap.String("dept", s.deptCode),
+			zap.String("role", s.roleCode))
 	}
 }
 

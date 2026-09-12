@@ -127,7 +127,7 @@ func (h *WorkflowHandler) ApproveTask(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTask(id, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		HandleWorkflowError(c, err, "审批失败")
+		HandleWorkflowError(h.logger, c, err, "审批失败")
 		return
 	}
 	utils.Success(c, nil)
@@ -159,7 +159,7 @@ func (h *WorkflowHandler) RejectTask(c *gin.Context) {
 		opts = append(opts, req.RejectTarget)
 	}
 	if err := h.svc.RejectTask(id, userID, middleware.GetDeptIDVal(c), req.Comment, opts...); err != nil {
-		HandleWorkflowError(c, err, "驳回失败")
+		HandleWorkflowError(h.logger, c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, nil)
@@ -168,7 +168,9 @@ func (h *WorkflowHandler) RejectTask(c *gin.Context) {
 // HandleWorkflowError maps workflow engine sentinel errors to the correct
 // HTTP status code so the frontend can distinguish authz (403), conflict
 // (409), bad request (400), and server errors (500).
-func HandleWorkflowError(c *gin.Context, err error, action string) {
+// Unexpected errors are logged server-side and returned to the client as
+// a generic message — never leak DB/SQL/internal details.
+func HandleWorkflowError(logger *zap.Logger, c *gin.Context, err error, action string) {
 	switch {
 	case errors.Is(err, workflow.ErrDeptNotMatch):
 		utils.Forbidden(c, fmt.Sprintf("%s: 当前用户部门无权操作该任务", action))
@@ -185,7 +187,13 @@ func HandleWorkflowError(c *gin.Context, err error, action string) {
 	case errors.Is(err, workflow.ErrForbidden):
 		utils.Forbidden(c, fmt.Sprintf("%s: 无权访问此流程", action))
 	default:
-		utils.InternalError(c, fmt.Sprintf("%s: %v", action, err))
+		if logger != nil {
+			logger.Error("unexpected workflow error",
+				zap.String("action", action),
+				zap.Error(err),
+			)
+		}
+		utils.InternalError(c, fmt.Sprintf("%s: 系统内部错误，请联系管理员", action))
 	}
 }
 

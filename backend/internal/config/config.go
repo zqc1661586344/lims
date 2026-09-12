@@ -108,6 +108,18 @@ func (c *Config) applyDefaults() {
 	if c.Server.Port == 0 {
 		c.Server.Port = 8080
 	}
+	if len(c.Server.TrustedProxies) == 0 {
+		if c.Env == "production" {
+			c.Server.TrustedProxies = []string{
+				"127.0.0.1/8",
+				"10.0.0.0/8",
+				"172.16.0.0/12",
+				"192.168.0.0/16",
+			}
+		} else {
+			c.Server.TrustedProxies = []string{"127.0.0.1"}
+		}
+	}
 	if c.Database.Port == 0 {
 		c.Database.Port = 5432
 	}

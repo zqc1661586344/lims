@@ -141,7 +141,7 @@ func (h *QCTaskHandler) Approve(c *gin.Context) {
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc).Error
 	}); err != nil {
-		HandleWorkflowError(c, err, "审批失败")
+		HandleWorkflowError(h.Logger, c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "质控任务通过"})
@@ -167,7 +167,7 @@ func (h *QCTaskHandler) Reject(c *gin.Context) {
 		qc := model.QCTask{TaskOrderID: req.TaskID}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc).Error
 	}, opts...); err != nil {
-		HandleWorkflowError(c, err, "驳回失败")
+		HandleWorkflowError(h.Logger, c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "质控任务已驳回"})

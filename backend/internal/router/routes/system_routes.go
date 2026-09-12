@@ -14,7 +14,7 @@ import (
 
 // RegisterSystemRoutes registers RBAC-related routes.
 func RegisterSystemRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
-	loginLimiter := middleware.NewRateLimiter(time.Minute, 10)
+	loginLimiter := middleware.NewRateLimiter(time.Minute, 60)
 	auth := handler.NewAuthHandler(cfg, db, loginLimiter)
 
 	// Public auth routes (no token required)

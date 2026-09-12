@@ -145,7 +145,7 @@ func (h *DataEntryHandler) Approve(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 	if err := h.svc.ApproveTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment); err != nil {
-		HandleWorkflowError(c, err, "审批失败")
+		HandleWorkflowError(h.Logger, c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "数据录入通过"})
@@ -167,7 +167,7 @@ func (h *DataEntryHandler) Reject(c *gin.Context) {
 		opts = append(opts, req.RejectTarget)
 	}
 	if err := h.svc.RejectTaskByOrder(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, opts...); err != nil {
-		HandleWorkflowError(c, err, "驳回失败")
+		HandleWorkflowError(h.Logger, c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "数据录入已驳回"})

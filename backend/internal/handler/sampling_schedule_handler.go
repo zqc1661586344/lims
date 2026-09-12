@@ -148,7 +148,7 @@ func (h *SamplingScheduleHandler) Approve(c *gin.Context) {
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(sched).FirstOrCreate(&sched).Error
 	}); err != nil {
-		HandleWorkflowError(c, err, "审批失败")
+		HandleWorkflowError(h.Logger, c, err, "审批失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "采样调度通过"})
@@ -174,7 +174,7 @@ func (h *SamplingScheduleHandler) Reject(c *gin.Context) {
 		sched := model.SamplingSchedule{TaskOrderID: req.TaskID}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(sched).FirstOrCreate(&sched).Error
 	}, opts...); err != nil {
-		HandleWorkflowError(c, err, "驳回失败")
+		HandleWorkflowError(h.Logger, c, err, "驳回失败")
 		return
 	}
 	utils.Success(c, gin.H{"message": "采样调度已驳回"})

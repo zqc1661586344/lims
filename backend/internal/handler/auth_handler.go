@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"time"
 
 	"lims-backend/internal/config"
@@ -34,13 +35,23 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	if h.loginLimiter != nil && !h.loginLimiter.AllowKey("user:"+req.Username) {
-		utils.Error(c, 429, "该账号尝试登录次数过多，请稍后再试")
-		return
+	userKey := "user:" + req.Username
+	if h.loginLimiter != nil {
+		if locked, remaining := h.loginLimiter.IsLocked(userKey); locked {
+			utils.Error(c, 429, fmt.Sprintf("该账号已被锁定，请在 %d 分钟后重试", int(remaining.Minutes())+1))
+			return
+		}
+		if !h.loginLimiter.AllowKey(userKey) {
+			utils.Error(c, 429, "该账号尝试登录次数过多，请稍后再试")
+			return
+		}
 	}
 
 	var user model.User
 	if err := h.db.Where("username = ?", req.Username).Preload("Dept").Preload("Roles").First(&user).Error; err != nil {
+		if h.loginLimiter != nil {
+			h.loginLimiter.RecordFail(userKey)
+		}
 		utils.Unauthorized(c, "用户名或密码错误")
 		return
 	}
@@ -51,6 +62,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if !utils.CheckPassword(user.Password, req.Password) {
+		if h.loginLimiter != nil {
+			h.loginLimiter.RecordFail(userKey)
+			if locked, remaining := h.loginLimiter.IsLocked(userKey); locked {
+				utils.Error(c, 429, fmt.Sprintf("密码错误次数过多，账号已锁定 %d 分钟", int(remaining.Minutes())+1))
+				return
+			}
+		}
 		utils.Unauthorized(c, "用户名或密码错误")
 		return
 	}
