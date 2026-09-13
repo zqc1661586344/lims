@@ -48,5 +48,8 @@ func RunAutoMigrate(logger *zap.Logger, db *gorm.DB) {
 		&model.LabSheet{},
 		&model.SamplingSheetTemplate{},
 		&model.SamplingSheet{},
+		&model.Sample{},
+		&model.TaskOrderTestItem{},
+		&model.SamplingPoint{},
 	)
 }

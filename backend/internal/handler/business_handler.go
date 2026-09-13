@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
@@ -68,6 +69,9 @@ func (h *TaskOrderHandler) Create(c *gin.Context) {
 		utils.InternalError(c, fmt.Sprintf("创建任务委托失败: %v", err))
 		return
 	}
+	if err := syncTestItems(h.GetDB(c), item.ID, req.TestItems); err != nil {
+		h.Logger.Warn("failed to sync test items to new table", zap.Error(err), zap.Uint("task_order_id", item.ID))
+	}
 	utils.Created(c, item)
 }
 
@@ -119,6 +123,11 @@ func (h *TaskOrderHandler) Update(c *gin.Context) {
 	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新任务委托失败: %v", err))
 		return
+	}
+	if req.TestItems != "" {
+		if err := syncTestItems(h.GetDB(c), item.ID, req.TestItems); err != nil {
+			h.Logger.Warn("failed to sync test items to new table on update", zap.Error(err), zap.Uint("task_order_id", item.ID))
+		}
 	}
 	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
@@ -216,4 +225,73 @@ func (h *NodeHandler) getDB(c *gin.Context) *gorm.DB {
 type ContractReviewHandler struct {
 	*GenericHandler[model.ContractReview]
 	svc *service.BusinessService
+}
+
+type legacyTestItem struct {
+	TestItemID uint   `json:"test_item_id"`
+	Name       string `json:"name"`
+	Code       string `json:"code"`
+	Standard   string `json:"standard"`
+	Unit       string `json:"unit"`
+	Method     string `json:"method"`
+}
+
+func syncTestItems(db *gorm.DB, taskOrderID uint, raw string) error {
+	if raw == "" || raw == "{}" || raw == "[]" {
+		return nil
+	}
+	var items []legacyTestItem
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		var outer []string
+		if err2 := json.Unmarshal([]byte(raw), &outer); err2 == nil {
+			for _, s := range outer {
+				var it legacyTestItem
+				if json.Unmarshal([]byte(s), &it) == nil {
+					items = append(items, it)
+				}
+			}
+		} else {
+			return err
+		}
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	if err := db.Where("task_order_id = ?", taskOrderID).Delete(&model.TaskOrderTestItem{}).Error; err != nil {
+		return err
+	}
+	for _, it := range items {
+		itemName := it.Name
+		if itemName == "" && it.TestItemID > 0 {
+			var di model.TestItem
+			if err := db.Select("name, code, unit, method").First(&di, it.TestItemID).Error; err == nil {
+				itemName = di.Name
+				if it.Code == "" {
+					it.Code = di.Code
+				}
+				if it.Unit == "" {
+					it.Unit = di.Unit
+				}
+				if it.Method == "" {
+					it.Method = di.Method
+				}
+			}
+		}
+		var tid *uint
+		if it.TestItemID > 0 {
+			tid = &it.TestItemID
+		}
+		if err := db.Create(&model.TaskOrderTestItem{
+			TaskOrderID: taskOrderID,
+			TestItemID:  tid,
+			ItemName:    itemName,
+			ItemCode:    it.Code,
+			Standard:    it.Standard,
+			Unit:        it.Unit,
+			Method:      it.Method,
+		}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }

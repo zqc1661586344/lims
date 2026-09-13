@@ -1,8 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
-
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
 	"lims-backend/internal/service"
@@ -55,6 +55,9 @@ func (h *SampleReceivingHandler) Create(c *gin.Context) {
 		utils.InternalError(c, fmt.Sprintf("创建样品接收记录失败: %v", err))
 		return
 	}
+	if err := syncSamples(h.GetDB(c), req.TaskOrderID, req.SampleCodes); err != nil {
+		h.Logger.Warn("failed to sync samples to new table", zap.Error(err), zap.Uint("task_order_id", req.TaskOrderID))
+	}
 	utils.Created(c, item)
 }
 
@@ -95,6 +98,11 @@ func (h *SampleReceivingHandler) Update(c *gin.Context) {
 	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新样品接收记录失败: %v", err))
 		return
+	}
+	if req.SampleCodes != "" {
+		if err := syncSamples(h.GetDB(c), item.TaskOrderID, req.SampleCodes); err != nil {
+			h.Logger.Warn("failed to sync samples on update", zap.Error(err), zap.Uint("task_order_id", item.TaskOrderID))
+		}
 	}
 	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
@@ -147,7 +155,13 @@ func (h *SampleReceivingHandler) Approve(c *gin.Context) {
 			SampleCodes:         req.SampleCodes,
 			ReceivingRecordPath: req.ReceivingRecordPath,
 		}
-		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
+		if err := tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error; err != nil {
+			return err
+		}
+		if req.SampleCodes != "" {
+			return syncSamples(tx, req.TaskID, req.SampleCodes)
+		}
+		return nil
 	}); err != nil {
 		HandleWorkflowError(h.Logger, c, err, "审批失败")
 		return
@@ -188,4 +202,51 @@ func (h *SampleReceivingHandler) Reject(c *gin.Context) {
 type TaskAssignHandler struct {
 	*GenericHandler[model.TaskAssign]
 	svc *service.BusinessService
+}
+
+func syncSamples(db *gorm.DB, taskOrderID uint, raw string) error {
+	if raw == "" || raw == "{}" || raw == "[]" {
+		return nil
+	}
+	var codes []string
+	if err := json.Unmarshal([]byte(raw), &codes); err != nil {
+		var arr []map[string]interface{}
+		if err2 := json.Unmarshal([]byte(raw), &arr); err2 == nil {
+			for _, m := range arr {
+				if code, ok := m["sample_code"].(string); ok && code != "" {
+					codes = append(codes, code)
+				} else if code, ok := m["code"].(string); ok && code != "" {
+					codes = append(codes, code)
+				} else if code, ok := m["name"].(string); ok && code != "" {
+					codes = append(codes, code)
+				}
+			}
+		} else {
+			return err
+		}
+	}
+	if len(codes) == 0 {
+		return nil
+	}
+	if err := db.Where("task_order_id = ?", taskOrderID).Delete(&model.Sample{}).Error; err != nil {
+		return err
+	}
+	for _, code := range codes {
+		if code == "" {
+			continue
+		}
+		var existing model.Sample
+		err := db.Where("sample_code = ?", code).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if err := db.Create(&model.Sample{
+			TaskOrderID: taskOrderID,
+			SampleCode:  code,
+			Status:      "pending",
+		}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }

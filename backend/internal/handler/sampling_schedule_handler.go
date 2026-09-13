@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
@@ -54,6 +55,9 @@ func (h *SamplingScheduleHandler) Create(c *gin.Context) {
 		utils.InternalError(c, fmt.Sprintf("创建采样调度失败: %v", err))
 		return
 	}
+	if err := syncSamplingPoints(h.GetDB(c), item.ID, req.SamplingPoints); err != nil {
+		h.Logger.Warn("failed to sync sampling points to new table", zap.Error(err), zap.Uint("schedule_id", item.ID))
+	}
 	utils.Created(c, item)
 }
 
@@ -94,6 +98,11 @@ func (h *SamplingScheduleHandler) Update(c *gin.Context) {
 	if err := h.GetDB(c).Model(&item).Updates(updates).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("更新采样调度失败: %v", err))
 		return
+	}
+	if req.SamplingPoints != "" {
+		if err := syncSamplingPoints(h.GetDB(c), item.ID, req.SamplingPoints); err != nil {
+			h.Logger.Warn("failed to sync sampling points on update", zap.Error(err), zap.Uint("schedule_id", item.ID))
+		}
 	}
 	h.GetDB(c).First(&item, id)
 	utils.Success(c, item)
@@ -146,7 +155,13 @@ func (h *SamplingScheduleHandler) Approve(c *gin.Context) {
 			SamplingPoints: req.SamplingPoints,
 			EquipmentList:  req.EquipmentList,
 		}
-		return tx.Where("task_order_id = ?", req.TaskID).Assign(sched).FirstOrCreate(&sched).Error
+		if err := tx.Where("task_order_id = ?", req.TaskID).Assign(sched).FirstOrCreate(&sched).Error; err != nil {
+			return err
+		}
+		if req.SamplingPoints != "" {
+			return syncSamplingPoints(tx, sched.ID, req.SamplingPoints)
+		}
+		return nil
 	}); err != nil {
 		HandleWorkflowError(h.Logger, c, err, "审批失败")
 		return
@@ -187,4 +202,69 @@ func (h *SamplingScheduleHandler) Reject(c *gin.Context) {
 type FieldSamplingRecordHandler struct {
 	*GenericHandler[model.FieldSamplingRecord]
 	svc *service.BusinessService
+}
+
+type legacySamplingPoint struct {
+	Name           string  `json:"name"`
+	PointName      string  `json:"point_name"`
+	Code           string  `json:"code"`
+	PointCode      string  `json:"point_code"`
+	Location       string  `json:"location"`
+	Longitude      float64 `json:"longitude"`
+	Latitude       float64 `json:"latitude"`
+	SamplingMethod string  `json:"sampling_method"`
+	SampleCount    int     `json:"sample_count"`
+	Type           string  `json:"type"`
+	Count          int     `json:"count"`
+}
+
+func syncSamplingPoints(db *gorm.DB, scheduleID uint, raw string) error {
+	if raw == "" || raw == "{}" || raw == "[]" {
+		return nil
+	}
+	var rawArr []map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &rawArr); err != nil {
+		return err
+	}
+	if len(rawArr) == 0 {
+		return nil
+	}
+	if err := db.Where("sampling_schedule_id = ?", scheduleID).Delete(&model.SamplingPoint{}).Error; err != nil {
+		return err
+	}
+	for _, m := range rawArr {
+		var pt legacySamplingPoint
+		b, _ := json.Marshal(m)
+		if err := json.Unmarshal(b, &pt); err != nil {
+			continue
+		}
+		name := pt.Name
+		if name == "" {
+			name = pt.PointName
+		}
+		code := pt.Code
+		if code == "" {
+			code = pt.PointCode
+		}
+		count := pt.SampleCount
+		if count == 0 {
+			count = pt.Count
+		}
+		if name == "" {
+			name = fmt.Sprintf("点位-%d", scheduleID)
+		}
+		if err := db.Create(&model.SamplingPoint{
+			SamplingScheduleID: scheduleID,
+			PointName:          name,
+			PointCode:          code,
+			Location:           pt.Location,
+			Longitude:          pt.Longitude,
+			Latitude:           pt.Latitude,
+			SamplingMethod:     pt.SamplingMethod,
+			SampleCount:        count,
+		}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }

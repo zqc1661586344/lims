@@ -338,16 +338,26 @@ func (s *BusinessService) ensureBusinessRecord(tx *gorm.DB, nodeCode string, ord
 			TestItemList: "{}",
 		}).Error
 	case workflow.NodeDataEntry:
-		var order model.TaskOrder
-		if err := tx.Select("id, test_items").First(&order, orderID).Error; err != nil {
-			return err
+		var testItemIDs []uint
+		var rows []model.TaskOrderTestItem
+		if err := tx.Where("task_order_id = ?", orderID).Find(&rows).Error; err == nil && len(rows) > 0 {
+			for _, r := range rows {
+				if r.TestItemID != nil && *r.TestItemID > 0 {
+					testItemIDs = append(testItemIDs, *r.TestItemID)
+				}
+			}
 		}
-
-		testItemIDs, err := parseTestItemIDs(order.TestItems)
-		if err != nil {
-			s.logger.Warn("NodeDataEntry: parse test_items failed", zap.Uint("order_id", orderID), zap.Error(err))
+		if len(testItemIDs) == 0 {
+			var order model.TaskOrder
+			if err := tx.Select("id, test_items").First(&order, orderID).Error; err != nil {
+				return err
+			}
+			var err error
+			testItemIDs, err = parseTestItemIDs(order.TestItems)
+			if err != nil {
+				s.logger.Warn("NodeDataEntry: parse legacy test_items failed", zap.Uint("order_id", orderID), zap.Error(err))
+			}
 		}
-
 		if len(testItemIDs) == 0 {
 			s.logger.Warn("NodeDataEntry: no test items defined on task order, skipping data entry creation",
 				zap.Uint("order_id", orderID))
