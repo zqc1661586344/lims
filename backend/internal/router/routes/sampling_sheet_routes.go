@@ -13,7 +13,7 @@ import (
 func RegisterSamplingSheetRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.Logger, db *gorm.DB) {
 	h := handler.NewSamplingSheetHandler(logger, db)
 	group := r.Group("/sampling-sheets")
-	group.Use(middleware.AuthMiddleware(cfg))
+	group.Use(middleware.AuthMiddleware(cfg, db))
 	group.Use(middleware.GormContextMiddleware(db))
 	{
 		group.GET("/templates", h.ListTemplates)

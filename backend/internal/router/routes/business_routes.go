@@ -30,7 +30,7 @@ func RegisterBusinessRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 	projectArchiveH := handler.NewProjectArchiveHandler(logger, db)
 
 	group := r.Group("/business")
-	group.Use(middleware.AuthMiddleware(cfg))
+	group.Use(middleware.AuthMiddleware(cfg, db))
 	group.Use(middleware.GormContextMiddleware(db))
 	{
 		g := group.Group("/task-orders")

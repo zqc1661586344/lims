@@ -13,7 +13,7 @@ import (
 func RegisterLabSheetRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.Logger, db *gorm.DB) {
 	h := handler.NewLabSheetHandler(logger, db)
 	group := r.Group("/lab-sheets")
-	group.Use(middleware.AuthMiddleware(cfg))
+	group.Use(middleware.AuthMiddleware(cfg, db))
 	group.Use(middleware.GormContextMiddleware(db))
 	{
 		// Templates

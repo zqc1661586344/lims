@@ -15,7 +15,7 @@ func RegisterWorkflowRoutes(r *gin.RouterGroup, cfg *config.Config, logger *zap.
 	wfH := handler.NewWorkflowHandler(logger, db)
 
 	group := r.Group("/workflow")
-	group.Use(middleware.AuthMiddleware(cfg))
+	group.Use(middleware.AuthMiddleware(cfg, db))
 	group.Use(middleware.GormContextMiddleware(db))
 	{
 		// Process instance management

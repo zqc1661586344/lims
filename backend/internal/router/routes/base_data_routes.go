@@ -17,7 +17,7 @@ func RegisterBaseDataRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB)
 	reagentH := handler.NewReagentHandler(db)
 
 	group := r.Group("/base-data")
-	group.Use(middleware.AuthMiddleware(cfg))
+	group.Use(middleware.AuthMiddleware(cfg, db))
 	group.Use(middleware.GormContextMiddleware(db))
 	{
 		// Test Items

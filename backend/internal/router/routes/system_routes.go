@@ -25,7 +25,7 @@ func RegisterSystemRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 
 	// Authenticated routes
 	protected := r.Group("")
-	protected.Use(middleware.AuthMiddleware(cfg))
+	protected.Use(middleware.AuthMiddleware(cfg, db))
 	{
 		protected.GET("/auth/profile", auth.Profile)
 		protected.POST("/auth/logout", auth.Logout)
@@ -39,7 +39,7 @@ func RegisterSystemRoutes(r *gin.RouterGroup, cfg *config.Config, db *gorm.DB) {
 	permH := system.NewPermissionHandler(db)
 
 	systemGroup := r.Group("/system")
-	systemGroup.Use(middleware.AuthMiddleware(cfg))
+	systemGroup.Use(middleware.AuthMiddleware(cfg, db))
 	systemGroup.Use(middleware.RequireAdmin())
 	systemGroup.Use(middleware.GormContextMiddleware(db))
 	{

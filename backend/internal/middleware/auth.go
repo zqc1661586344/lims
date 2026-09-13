@@ -8,10 +8,15 @@ import (
 	"lims-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-// AuthMiddleware returns a Gin middleware that validates JWT tokens.
-func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
+// AuthMiddleware returns a Gin middleware that validates JWT tokens AND
+// refreshes user state (status, is_admin, dept_id, permissions) from the
+// database on every request. This ensures that disabling a user or removing
+// a permission takes effect immediately — stale values in the JWT claims
+// are never trusted.
+func AuthMiddleware(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -20,7 +25,6 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// Expect "Bearer <token>"
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			utils.Unauthorized(c, "invalid authorization format")
@@ -35,14 +39,59 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// Check if token has been revoked (logged out)
 		if utils.GetTokenBlacklist().IsRevoked(claims.ID) {
 			utils.Unauthorized(c, "token has been revoked")
 			c.Abort()
 			return
 		}
 
-		// Store user info in context
+		if db != nil {
+			var row struct {
+				ID      uint
+				Status  int
+				IsAdmin bool
+				DeptID  *uint
+			}
+			if err := db.Raw(
+				"SELECT id, status, is_admin, dept_id FROM users WHERE id = ?",
+				claims.UserID,
+			).Scan(&row).Error; err != nil || row.ID == 0 {
+				utils.Unauthorized(c, "用户不存在")
+				c.Abort()
+				return
+			}
+			if row.Status == 0 {
+				utils.Unauthorized(c, "账号已被禁用")
+				c.Abort()
+				return
+			}
+
+			claims.IsAdmin = row.IsAdmin
+			claims.DeptID = row.DeptID
+
+			var perms []string
+			if row.IsAdmin {
+				if err := db.Raw("SELECT code FROM permissions").Scan(&perms).Error; err != nil {
+					utils.InternalError(c, "加载权限失败")
+					c.Abort()
+					return
+				}
+			} else {
+				if err := db.Raw(`
+					SELECT DISTINCT p.code
+					FROM permissions p
+					JOIN role_permissions rp ON rp.permission_id = p.id
+					JOIN user_roles ur ON ur.role_id = rp.role_id
+					WHERE ur.user_id = ?
+				`, claims.UserID).Scan(&perms).Error; err != nil {
+					utils.InternalError(c, "加载权限失败")
+					c.Abort()
+					return
+				}
+			}
+			claims.Permissions = perms
+		}
+
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("dept_id", claims.DeptID)
