@@ -32,12 +32,14 @@ func NewTaskOrderHandler(logger *zap.Logger, db *gorm.DB) *TaskOrderHandler {
 func (h *TaskOrderHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c,
 		[]string{"order_no", "customer_name", "project_name"},
-		nil,
+		func(db *gorm.DB, c *gin.Context) *gorm.DB {
+			return service.ApplyTaskOrderSelfScope(db, c)
+		},
 	)
 }
 
 func (h *TaskOrderHandler) Get(c *gin.Context) {
-	h.GenericHandler.Get(c)
+	h.GenericHandler.GetWithScope(c, service.ApplyTaskOrderSelfScope)
 }
 
 type CreateTaskOrderRequest struct {

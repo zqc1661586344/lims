@@ -60,7 +60,13 @@ func (h *GenericHandler[T]) List(c *gin.Context, keywordFields []string, scope L
 	utils.SuccessPage(c, items, total, page, pageSize)
 }
 
+type GetScope func(db *gorm.DB, c *gin.Context) *gorm.DB
+
 func (h *GenericHandler[T]) Get(c *gin.Context, preloads ...string) {
+	h.GetWithScope(c, nil, preloads...)
+}
+
+func (h *GenericHandler[T]) GetWithScope(c *gin.Context, scope GetScope, preloads ...string) {
 	id, err := parseUint(c.Param("id"))
 	if err != nil {
 		utils.BadRequest(c, "无效的ID")
@@ -70,6 +76,9 @@ func (h *GenericHandler[T]) Get(c *gin.Context, preloads ...string) {
 	q := h.GetDB(c)
 	for _, p := range preloads {
 		q = q.Preload(p)
+	}
+	if scope != nil {
+		q = scope(q, c)
 	}
 	if err := q.First(&item, id).Error; err != nil {
 		utils.NotFound(c, "记录不存在")

@@ -23,6 +23,7 @@ func NewContractReviewHandler(logger *zap.Logger, db *gorm.DB) *ContractReviewHa
 // List 返回合同评审列表
 func (h *ContractReviewHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		db = service.ApplyTaskOrderScope(db, c)
 		if id := c.Query("task_order_id"); id != "" {
 			db = db.Where("task_order_id = ?", id)
 		}
@@ -32,7 +33,7 @@ func (h *ContractReviewHandler) List(c *gin.Context) {
 
 // Get 获取单个合同评审
 func (h *ContractReviewHandler) Get(c *gin.Context) {
-	h.GenericHandler.Get(c)
+	h.GenericHandler.GetWithScope(c, service.ApplyTaskOrderScope)
 }
 
 type SaveContractReviewRequest struct {

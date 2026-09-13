@@ -4,9 +4,9 @@ services:
     image: postgres:15-alpine
     container_name: lims-postgres
     environment:
-      POSTGRES_USER: lims
-      POSTGRES_PASSWORD: lims123
-      POSTGRES_DB: lims
+      POSTGRES_USER: ${POSTGRES_USER:-lims}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-lims}
     ports:
       - "5432:5432"
     volumes:
@@ -15,7 +15,7 @@ services:
     networks:
       - lims-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lims"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lims}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,8 +25,8 @@ services:
     container_name: lims-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: lims
-      MINIO_ROOT_PASSWORD: lims123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lims}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -49,9 +49,9 @@ services:
       LIMS_ENV: "production"
       LIMS_DATABASE_HOST: postgres
       LIMS_DATABASE_PORT: 5432
-      LIMS_DATABASE_USER: lims
-      LIMS_DATABASE_PASSWORD: lims123
-      LIMS_DATABASE_DBNAME: lims
+      LIMS_DATABASE_USER: ${POSTGRES_USER:-lims}
+      LIMS_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      LIMS_DATABASE_DBNAME: ${POSTGRES_DB:-lims}
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,12 +69,12 @@ services:
       LIMS_ENV: "production"
       LIMS_DATABASE_HOST: postgres
       LIMS_DATABASE_PORT: 5432
-      LIMS_DATABASE_USER: lims
-      LIMS_DATABASE_PASSWORD: lims123
-      LIMS_DATABASE_DBNAME: lims
+      LIMS_DATABASE_USER: ${POSTGRES_USER:-lims}
+      LIMS_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      LIMS_DATABASE_DBNAME: ${POSTGRES_DB:-lims}
       LIMS_MINIO_ENDPOINT: minio:9000
-      LIMS_MINIO_ACCESS_KEY: lims
-      LIMS_MINIO_SECRET_KEY: lims123
+      LIMS_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-lims}
+      LIMS_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
     ports:
       - "8080:8080"
     depends_on:

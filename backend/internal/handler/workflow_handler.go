@@ -18,6 +18,7 @@ import (
 type WorkflowHandler struct {
 	logger *zap.Logger
 	svc    *service.WorkflowService
+	db     *gorm.DB
 }
 
 // NewWorkflowHandler creates a new workflow handler.
@@ -25,7 +26,33 @@ func NewWorkflowHandler(logger *zap.Logger, db *gorm.DB) *WorkflowHandler {
 	return &WorkflowHandler{
 		logger: logger,
 		svc:    service.NewWorkflowService(logger, db),
+		db:     db,
 	}
+}
+
+// canAccessInstance checks whether the current user may view the given
+// process instance — admin bypasses, instance creator has access, or any
+// process_task in that instance is assigned to the user's department.
+func (h *WorkflowHandler) canAccessInstance(c *gin.Context, instanceID uint) bool {
+	if middleware.IsAdmin(c) {
+		return true
+	}
+
+	userID := middleware.GetUserID(c)
+	userDeptID := middleware.GetDeptIDVal(c)
+
+	var cnt int64
+	h.db.Raw(`
+		SELECT COUNT(*) FROM process_instances pi
+		WHERE pi.id = ? AND (
+			pi.created_by = ? OR EXISTS (
+				SELECT 1 FROM process_tasks pt
+				WHERE pt.process_instance_id = pi.id
+				  AND pt.assignee_dept_id = ?
+			)
+		)`, instanceID, userID, userDeptID).Scan(&cnt)
+
+	return cnt > 0
 }
 
 // StartInstance creates a new process instance.
@@ -54,6 +81,10 @@ func (h *WorkflowHandler) GetInstance(c *gin.Context) {
 	id, err := parseUint(c.Param("id"))
 	if err != nil {
 		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	if !h.canAccessInstance(c, id) {
+		utils.Forbidden(c, "无权查看此流程实例")
 		return
 	}
 	instance, err := h.svc.GetInstance(id)
@@ -100,6 +131,10 @@ func (h *WorkflowHandler) GetProcessHistory(c *gin.Context) {
 	id, err := parseUint(c.Param("id"))
 	if err != nil {
 		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	if !h.canAccessInstance(c, id) {
+		utils.Forbidden(c, "无权查看此流程历史")
 		return
 	}
 	history, err := h.svc.GetProcessHistory(id)

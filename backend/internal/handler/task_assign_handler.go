@@ -23,6 +23,7 @@ func NewTaskAssignHandler(logger *zap.Logger, db *gorm.DB) *TaskAssignHandler {
 
 func (h *TaskAssignHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		db = service.ApplyTaskOrderScope(db, c)
 		if id := c.Query("task_order_id"); id != "" {
 			db = db.Where("task_order_id = ?", id)
 		}
@@ -31,7 +32,7 @@ func (h *TaskAssignHandler) List(c *gin.Context) {
 }
 
 func (h *TaskAssignHandler) Get(c *gin.Context) {
-	h.GenericHandler.Get(c)
+	h.GenericHandler.GetWithScope(c, service.ApplyTaskOrderScope)
 }
 
 func (h *TaskAssignHandler) Create(c *gin.Context) {

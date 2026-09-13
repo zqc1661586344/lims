@@ -22,6 +22,7 @@ func NewDataReviewHandler(logger *zap.Logger, db *gorm.DB) *DataReviewHandler {
 
 func (h *DataReviewHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		db = service.ApplyTaskOrderScope(db, c)
 		if id := c.Query("task_order_id"); id != "" {
 			db = db.Where("task_order_id = ?", id)
 		}
@@ -30,7 +31,7 @@ func (h *DataReviewHandler) List(c *gin.Context) {
 }
 
 func (h *DataReviewHandler) Get(c *gin.Context) {
-	h.GenericHandler.Get(c)
+	h.GenericHandler.GetWithScope(c, service.ApplyTaskOrderScope)
 }
 
 func (h *DataReviewHandler) Create(c *gin.Context) {

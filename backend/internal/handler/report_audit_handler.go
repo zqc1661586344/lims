@@ -22,6 +22,7 @@ func NewReportAuditHandler(logger *zap.Logger, db *gorm.DB) *ReportAuditHandler 
 
 func (h *ReportAuditHandler) List(c *gin.Context) {
 	h.GenericHandler.List(c, nil, func(db *gorm.DB, c *gin.Context) *gorm.DB {
+		db = service.ApplyTaskOrderScope(db, c)
 		if id := c.Query("task_order_id"); id != "" {
 			db = db.Where("task_order_id = ?", id)
 		}
@@ -30,7 +31,7 @@ func (h *ReportAuditHandler) List(c *gin.Context) {
 }
 
 func (h *ReportAuditHandler) Get(c *gin.Context) {
-	h.GenericHandler.Get(c)
+	h.GenericHandler.GetWithScope(c, service.ApplyTaskOrderScope)
 }
 
 func (h *ReportAuditHandler) Create(c *gin.Context) {

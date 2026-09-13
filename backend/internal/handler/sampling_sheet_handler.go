@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
+	"lims-backend/internal/service"
 	"lims-backend/internal/utils"
 	"strconv"
 
@@ -210,7 +211,7 @@ func (h *SamplingSheetHandler) GetTemplateBySampleType(c *gin.Context) {
 func (h *SamplingSheetHandler) List(c *gin.Context) {
 	page, pageSize, offset := utils.GetPagination(c)
 	var items []model.SamplingSheet
-	query := h.getDB(c).Preload("Template").Order("id DESC")
+	query := service.ApplyTaskOrderScope(h.getDB(c).Preload("Template"), c).Order("id DESC")
 	if taskOrderID := c.Query("task_order_id"); taskOrderID != "" {
 		query = query.Where("task_order_id = ?", taskOrderID)
 	}
@@ -239,7 +240,8 @@ func (h *SamplingSheetHandler) Get(c *gin.Context) {
 		return
 	}
 	var item model.SamplingSheet
-	if err := h.getDB(c).Preload("Template").First(&item, id).Error; err != nil {
+	q := service.ApplyTaskOrderScope(h.getDB(c).Preload("Template"), c)
+	if err := q.First(&item, id).Error; err != nil {
 		utils.NotFound(c, "采样单不存在")
 		return
 	}

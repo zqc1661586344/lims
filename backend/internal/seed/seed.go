@@ -57,6 +57,8 @@ func seedPermissions(db *gorm.DB, logger *zap.Logger) {
 		{Name: "报告签发", Code: "business:report-sign", Type: "api", Sort: 14},
 		{Name: "报告打印发放", Code: "business:report-print", Type: "api", Sort: 15},
 		{Name: "项目归档", Code: "business:project-archive", Type: "api", Sort: 16},
+		{Name: "流程查看", Code: "workflow:view", Type: "api", Sort: 20},
+		{Name: "流程审批", Code: "workflow:task", Type: "api", Sort: 21},
 	}
 
 	for _, p := range perms {
