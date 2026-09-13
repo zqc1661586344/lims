@@ -47,7 +47,7 @@ func (h *QCTaskHandler) Create(c *gin.Context) {
 	item := model.QCTask{
 		TaskOrderID: req.TaskOrderID,
 		QCType:      req.QCType,
-		QCDetails:   req.QCDetails,
+		QCDetails:   model.JSONB(req.QCDetails),
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建质控任务失败: %v", err))
@@ -137,7 +137,7 @@ func (h *QCTaskHandler) Approve(c *gin.Context) {
 		qc := model.QCTask{
 			TaskOrderID: req.TaskID,
 			QCType:      req.QCType,
-			QCDetails:   req.QCDetails,
+			QCDetails:   model.JSONB(req.QCDetails),
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(qc).FirstOrCreate(&qc).Error
 	}); err != nil {

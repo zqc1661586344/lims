@@ -11,7 +11,7 @@ type TaskOrder struct {
 	CustomerName      string    `gorm:"size:200;not null" json:"customer_name"`
 	ProjectName       string    `gorm:"size:200;not null" json:"project_name"`
 	SampleType        string    `gorm:"size:100" json:"sample_type"`
-	TestItems         string    `gorm:"type:jsonb" json:"test_items"`
+	TestItems         JSONB     `gorm:"type:jsonb" json:"test_items"`
 	Status            int       `gorm:"default:0" json:"status"`
 	ProcessInstanceID *uint     `gorm:"constraint:OnDelete:SET NULL;references:process_instances(id)" json:"process_instance_id"`
 	CreatedBy         *uint     `gorm:"index;constraint:OnDelete:SET NULL;references:users(id)" json:"created_by"`
@@ -39,7 +39,7 @@ type QCTask struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	TaskOrderID uint      `gorm:"uniqueIndex;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
 	QCType      string    `gorm:"size:100" json:"qc_type"`
-	QCDetails   string    `gorm:"type:jsonb" json:"qc_details"`
+	QCDetails   JSONB     `gorm:"type:jsonb" json:"qc_details"`
 }
 
 func (QCTask) TableName() string { return "qc_tasks" }
@@ -51,8 +51,8 @@ type SamplingSchedule struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 	TaskOrderID    uint      `gorm:"uniqueIndex;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
 	SamplingTeam   string    `gorm:"size:200" json:"sampling_team"`
-	SamplingPoints string    `gorm:"type:jsonb" json:"sampling_points"`
-	EquipmentList  string    `gorm:"type:jsonb" json:"equipment_list"`
+	SamplingPoints JSONB     `gorm:"type:jsonb" json:"sampling_points"`
+	EquipmentList  JSONB     `gorm:"type:jsonb" json:"equipment_list"`
 }
 
 func (SamplingSchedule) TableName() string { return "sampling_schedules" }
@@ -63,8 +63,8 @@ type FieldSamplingRecord struct {
 	CreatedAt              time.Time `json:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at"`
 	TaskOrderID            uint      `gorm:"uniqueIndex;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
-	SamplePhotos           string    `gorm:"type:jsonb" json:"sample_photos"`
-	EquipmentCalRecords    string    `gorm:"type:jsonb" json:"equipment_cal_records"`
+	SamplePhotos           JSONB     `gorm:"type:jsonb" json:"sample_photos"`
+	EquipmentCalRecords    JSONB     `gorm:"type:jsonb" json:"equipment_cal_records"`
 	SamplingRecordFilePath string    `gorm:"size:500" json:"sampling_record_file_path"`
 }
 
@@ -77,7 +77,7 @@ type SampleReceiving struct {
 	UpdatedAt           time.Time `json:"updated_at"`
 	TaskOrderID         uint      `gorm:"uniqueIndex;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
 	SampleCondition     string    `gorm:"size:200" json:"sample_condition"`
-	SampleCodes         string    `gorm:"type:jsonb" json:"sample_codes"`
+	SampleCodes         JSONB     `gorm:"type:jsonb" json:"sample_codes"`
 	ReceivingRecordPath string    `gorm:"size:500" json:"receiving_record_path"`
 }
 
@@ -91,19 +91,21 @@ type TaskAssign struct {
 	TaskOrderID    uint      `gorm:"uniqueIndex;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
 	AssignedTo     string    `gorm:"size:200" json:"assigned_to"`
 	AssigneeUserID *uint     `gorm:"index;constraint:OnDelete:SET NULL;references:users(id)" json:"assignee_user_id"`
-	TestItemList   string    `gorm:"type:jsonb" json:"test_item_list"`
+	TestItemList   JSONB     `gorm:"type:jsonb" json:"test_item_list"`
 }
 
 func (TaskAssign) TableName() string { return "task_assigns" }
 
 // DataEntry 数据录入（节点8）
+// 一对多：一个 TaskOrder 可对应多个 DataEntry（按检测项拆分录入），
+// 同一 task_order_id + test_item_id 组合唯一。
 type DataEntry struct {
 	ID           uint      `gorm:"primarykey" json:"id"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
-	TaskOrderID  uint      `gorm:"index;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
-	TestItemID   uint      `json:"test_item_id"`
-	OriginalData string    `gorm:"type:jsonb" json:"original_data"`
+	TaskOrderID  uint      `gorm:"uniqueIndex:idx_data_entry_task_item;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
+	TestItemID   uint      `gorm:"uniqueIndex:idx_data_entry_task_item" json:"test_item_id"`
+	OriginalData JSONB     `gorm:"type:jsonb" json:"original_data"`
 	RawRecordID  *uint     `json:"raw_record_id"`
 }
 
@@ -117,7 +119,7 @@ type DataReview struct {
 	TaskOrderID   uint      `gorm:"uniqueIndex;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
 	ReviewResult  string    `gorm:"size:20;not null" json:"review_result"`
 	ReviewComment string    `gorm:"type:text" json:"review_comment"`
-	IssuesFound   string    `gorm:"type:jsonb" json:"issues_found"`
+	IssuesFound   JSONB     `gorm:"type:jsonb" json:"issues_found"`
 }
 
 func (DataReview) TableName() string { return "data_reviews" }
@@ -130,7 +132,7 @@ type DataAudit struct {
 	TaskOrderID  uint      `gorm:"uniqueIndex;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
 	AuditResult  string    `gorm:"size:20;not null" json:"audit_result"`
 	AuditComment string    `gorm:"type:text" json:"audit_comment"`
-	IssueList    string    `gorm:"type:jsonb" json:"issue_list"`
+	IssueList    JSONB     `gorm:"type:jsonb" json:"issue_list"`
 }
 
 func (DataAudit) TableName() string { return "data_audits" }
@@ -144,9 +146,9 @@ type ReportPrepare struct {
 	ReportNo       string    `gorm:"size:100" json:"report_no"`
 	PrepareOpinion string    `gorm:"type:text" json:"prepare_opinion"`
 	ReportTitle    string    `gorm:"size:200;not null" json:"report_title"`
-	ReportContent  string    `gorm:"type:jsonb" json:"report_content"`
+	ReportContent  JSONB     `gorm:"type:jsonb" json:"report_content"`
 	ReportFile     string    `gorm:"size:500" json:"report_file"`
-	Attachments    string    `gorm:"type:jsonb" json:"attachments"`
+	Attachments    JSONB     `gorm:"type:jsonb" json:"attachments"`
 }
 
 func (ReportPrepare) TableName() string { return "report_prepares" }
@@ -159,7 +161,7 @@ type ReportReview struct {
 	TaskOrderID   uint      `gorm:"uniqueIndex;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
 	ReviewResult  string    `gorm:"size:20;not null" json:"review_result"`
 	ReviewComment string    `gorm:"type:text" json:"review_comment"`
-	ReviewedItems string    `gorm:"type:jsonb" json:"reviewed_items"`
+	ReviewedItems JSONB     `gorm:"type:jsonb" json:"reviewed_items"`
 }
 
 func (ReportReview) TableName() string { return "report_reviews" }
@@ -172,7 +174,7 @@ type ReportAudit struct {
 	TaskOrderID  uint      `gorm:"uniqueIndex;not null;constraint:OnDelete:CASCADE;references:task_orders(id)" json:"task_order_id"`
 	AuditResult  string    `gorm:"size:20;not null" json:"audit_result"`
 	AuditComment string    `gorm:"type:text" json:"audit_comment"`
-	AuditIssues  string    `gorm:"type:jsonb" json:"audit_issues"`
+	AuditIssues  JSONB     `gorm:"type:jsonb" json:"audit_issues"`
 }
 
 func (ReportAudit) TableName() string { return "report_audits" }
@@ -188,7 +190,7 @@ type ReportSign struct {
 	PrepareOpinion string     `gorm:"type:text" json:"prepare_opinion"`
 	ReviewOpinion  string     `gorm:"type:text" json:"review_opinion"`
 	AuditOpinion   string     `gorm:"type:text" json:"audit_opinion"`
-	RawRecords     string     `gorm:"type:jsonb" json:"raw_records"`
+	RawRecords     JSONB      `gorm:"type:jsonb" json:"raw_records"`
 	SignResult     string     `gorm:"size:20;not null" json:"sign_result"`
 	SignComment    string     `gorm:"type:text" json:"sign_comment"`
 	SignerName     string     `gorm:"size:100" json:"signer_name"`
@@ -224,7 +226,7 @@ type ProjectArchive struct {
 	ArchiveNo       string     `gorm:"size:100;uniqueIndex" json:"archive_no"`
 	ArchiveLocation string     `gorm:"size:200" json:"archive_location"`
 	ArchiveDate     *time.Time `json:"archive_date"`
-	ArchiveFiles    string     `gorm:"type:jsonb" json:"archive_files"`
+	ArchiveFiles    JSONB      `gorm:"type:jsonb" json:"archive_files"`
 	ArchiveComment  string     `gorm:"type:text" json:"archive_comment"`
 	RetentionPeriod int        `gorm:"default:36" json:"retention_period"`
 }

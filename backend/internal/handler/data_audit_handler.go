@@ -48,7 +48,7 @@ func (h *DataAuditHandler) Create(c *gin.Context) {
 		TaskOrderID:  req.TaskOrderID,
 		AuditResult:  req.AuditResult,
 		AuditComment: req.AuditComment,
-		IssueList:    req.IssueList,
+		IssueList:    model.JSONB(req.IssueList),
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建数据审核失败: %v", err))
@@ -148,7 +148,7 @@ func (h *DataAuditHandler) Approve(c *gin.Context) {
 			TaskOrderID:  req.TaskID,
 			AuditResult:  effectiveResult,
 			AuditComment: req.AuditComment,
-			IssueList:    req.IssueList,
+			IssueList:    model.JSONB(req.IssueList),
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(audit).FirstOrCreate(&audit).Error
 	}); err != nil {

@@ -46,8 +46,8 @@ func (h *FieldSamplingRecordHandler) Create(c *gin.Context) {
 	}
 	item := model.FieldSamplingRecord{
 		TaskOrderID:            req.TaskOrderID,
-		SamplePhotos:           req.SamplePhotos,
-		EquipmentCalRecords:    req.EquipmentCalRecords,
+		SamplePhotos:           model.JSONB(req.SamplePhotos),
+		EquipmentCalRecords:    model.JSONB(req.EquipmentCalRecords),
 		SamplingRecordFilePath: req.SamplingRecordFilePath,
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
@@ -142,8 +142,8 @@ func (h *FieldSamplingRecordHandler) Approve(c *gin.Context) {
 	if err := h.svc.ApproveWithBusiness(req.TaskID, userID, middleware.GetDeptIDVal(c), req.Comment, func(tx *gorm.DB) error {
 		rec := model.FieldSamplingRecord{
 			TaskOrderID:            req.TaskID,
-			SamplePhotos:           req.SamplePhotos,
-			EquipmentCalRecords:    req.EquipmentCalRecords,
+			SamplePhotos:           model.JSONB(req.SamplePhotos),
+			EquipmentCalRecords:    model.JSONB(req.EquipmentCalRecords),
 			SamplingRecordFilePath: req.SamplingRecordFilePath,
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error

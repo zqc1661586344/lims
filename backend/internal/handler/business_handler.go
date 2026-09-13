@@ -61,7 +61,7 @@ func (h *TaskOrderHandler) Create(c *gin.Context) {
 		CustomerName: req.CustomerName,
 		ProjectName:  req.ProjectName,
 		SampleType:   req.SampleType,
-		TestItems:    req.TestItems,
+		TestItems:    model.JSONB(req.TestItems),
 		Status:       0, // 草稿
 		CreatedBy:    &userID,
 	}

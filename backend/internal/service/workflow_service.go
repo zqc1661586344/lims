@@ -47,7 +47,7 @@ func (s *WorkflowService) RejectTask(taskID uint, userID uint, userDeptID uint, 
 //   - isAdmin=true  → all departments' pending tasks (cross-department admin view)
 //   - otherwise if deptID is set  → that department's pending tasks
 //   - otherwise                  → current user's pending tasks
-func (s *WorkflowService) GetPendingTasks(deptID *uint, userID uint, isAdmin bool) ([]map[string]interface{}, error) {
+func (s *WorkflowService) GetPendingTasks(deptID *uint, userID uint, isAdmin bool) ([]workflow.PendingTaskDTO, error) {
 	if isAdmin {
 		return s.engine.GetAllPendingTasks()
 	}
@@ -57,22 +57,18 @@ func (s *WorkflowService) GetPendingTasks(deptID *uint, userID uint, isAdmin boo
 	return s.engine.GetPendingTasksByUser(userID)
 }
 
-// GetProcessHistory returns the task history for a process instance.
-func (s *WorkflowService) GetProcessHistory(instanceID uint) ([]map[string]interface{}, error) {
+func (s *WorkflowService) GetProcessHistory(instanceID uint) ([]workflow.ProcessHistoryDTO, error) {
 	return s.engine.GetProcessHistory(instanceID)
 }
 
-// GetInstance returns a process instance by ID.
-func (s *WorkflowService) GetInstance(instanceID uint) (map[string]interface{}, error) {
+func (s *WorkflowService) GetInstance(instanceID uint) (*workflow.ProcessInstanceDTO, error) {
 	return s.engine.GetInstance(instanceID)
 }
 
-// GetNodeDefinitions returns all workflow node definitions.
 func (s *WorkflowService) GetNodeDefinitions() []workflow.NodeDefinition {
 	return workflow.GetDefinition()
 }
 
-// GetProgressByBusiness returns workflow progress for a business object.
-func (s *WorkflowService) GetProgressByBusiness(businessType string, businessID uint, userID uint, userDeptID uint, isAdmin bool) (map[string]interface{}, error) {
+func (s *WorkflowService) GetProgressByBusiness(businessType string, businessID uint, userID uint, userDeptID uint, isAdmin bool) (*workflow.ProgressDTO, error) {
 	return s.engine.GetProgressByBusiness(businessType, businessID, userID, userDeptID, isAdmin)
 }

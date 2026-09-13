@@ -49,6 +49,22 @@ export const useUserStore = defineStore('user', () => {
     return list.includes(code) || list.includes('*')
   }
 
+  function hasAnyPermission(codes: string[]): boolean {
+    if (isAdmin.value) return true
+    if (codes.length === 0) return true
+    const list = permissions.value
+    if (list.includes('*')) return true
+    return codes.some((c) => list.includes(c))
+  }
+
+  function hasAllPermissions(codes: string[]): boolean {
+    if (isAdmin.value) return true
+    if (codes.length === 0) return true
+    const list = permissions.value
+    if (list.includes('*')) return true
+    return codes.every((c) => list.includes(c))
+  }
+
   function setAuth(data: { token: string; username: string; is_admin: boolean; permissions: string[] }) {
     token.value = data.token
     username.value = data.username
@@ -69,5 +85,5 @@ export const useUserStore = defineStore('user', () => {
     sessionStorage.clear()
   }
 
-  return { token, username, isAdmin, permissions, isLoggedIn, isExpired, hasPermission, setAuth, clearAuth }
+  return { token, username, isAdmin, permissions, isLoggedIn, isExpired, hasPermission, hasAnyPermission, hasAllPermissions, setAuth, clearAuth }
 })

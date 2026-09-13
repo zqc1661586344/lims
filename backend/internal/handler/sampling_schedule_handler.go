@@ -48,8 +48,8 @@ func (h *SamplingScheduleHandler) Create(c *gin.Context) {
 	item := model.SamplingSchedule{
 		TaskOrderID:    req.TaskOrderID,
 		SamplingTeam:   req.SamplingTeam,
-		SamplingPoints: req.SamplingPoints,
-		EquipmentList:  req.EquipmentList,
+		SamplingPoints: model.JSONB(req.SamplingPoints),
+		EquipmentList:  model.JSONB(req.EquipmentList),
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建采样调度失败: %v", err))
@@ -152,8 +152,8 @@ func (h *SamplingScheduleHandler) Approve(c *gin.Context) {
 		sched := model.SamplingSchedule{
 			TaskOrderID:    req.TaskID,
 			SamplingTeam:   req.SamplingTeam,
-			SamplingPoints: req.SamplingPoints,
-			EquipmentList:  req.EquipmentList,
+			SamplingPoints: model.JSONB(req.SamplingPoints),
+			EquipmentList:  model.JSONB(req.EquipmentList),
 		}
 		if err := tx.Where("task_order_id = ?", req.TaskID).Assign(sched).FirstOrCreate(&sched).Error; err != nil {
 			return err

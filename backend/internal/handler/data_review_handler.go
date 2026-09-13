@@ -48,7 +48,7 @@ func (h *DataReviewHandler) Create(c *gin.Context) {
 		TaskOrderID:   req.TaskOrderID,
 		ReviewResult:  req.ReviewResult,
 		ReviewComment: req.ReviewComment,
-		IssuesFound:   req.IssuesFound,
+		IssuesFound:   model.JSONB(req.IssuesFound),
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建数据复核失败: %v", err))
@@ -148,7 +148,7 @@ func (h *DataReviewHandler) Approve(c *gin.Context) {
 			TaskOrderID:   req.TaskID,
 			ReviewResult:  effectiveResult,
 			ReviewComment: req.ReviewComment,
-			IssuesFound:   req.IssuesFound,
+			IssuesFound:   model.JSONB(req.IssuesFound),
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(review).FirstOrCreate(&review).Error
 	}); err != nil {

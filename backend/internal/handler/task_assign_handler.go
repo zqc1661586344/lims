@@ -49,7 +49,7 @@ func (h *TaskAssignHandler) Create(c *gin.Context) {
 		TaskOrderID:    req.TaskOrderID,
 		AssignedTo:     req.AssignedTo,
 		AssigneeUserID: req.AssigneeUserID,
-		TestItemList:   req.TestItemList,
+		TestItemList:   model.JSONB(req.TestItemList),
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建任务分配失败: %v", err))
@@ -145,7 +145,7 @@ func (h *TaskAssignHandler) Approve(c *gin.Context) {
 			TaskOrderID:    req.TaskID,
 			AssignedTo:     req.AssignedTo,
 			AssigneeUserID: req.AssigneeUserID,
-			TestItemList:   req.TestItemList,
+			TestItemList:   model.JSONB(req.TestItemList),
 		}
 		if err := tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error; err != nil {
 			return err

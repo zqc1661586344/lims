@@ -55,7 +55,7 @@ func (h *ProjectArchiveHandler) Create(c *gin.Context) {
 		ArchiveNo:       req.ArchiveNo,
 		ArchiveLocation: req.ArchiveLocation,
 		ArchiveDate:     req.ArchiveDate,
-		ArchiveFiles:    req.ArchiveFiles,
+		ArchiveFiles:    model.JSONB(req.ArchiveFiles),
 		ArchiveComment:  req.ArchiveComment,
 		RetentionPeriod: req.RetentionPeriod,
 	}
@@ -177,7 +177,7 @@ func (h *ProjectArchiveHandler) Approve(c *gin.Context) {
 			ArchiveNo:       req.ArchiveNo,
 			ArchiveLocation: req.ArchiveLocation,
 			ArchiveDate:     req.ArchiveDate,
-			ArchiveFiles:    archiveFiles,
+			ArchiveFiles:    model.JSONB(archiveFiles),
 			ArchiveComment:  req.ArchiveComment,
 			RetentionPeriod: retentionPeriod,
 		}
@@ -208,8 +208,8 @@ func (h *ProjectArchiveHandler) aggregateArchiveFilesWithTx(db *gorm.DB, taskOrd
 	}
 
 	var qc model.QCTask
-	if err := db.Where("task_order_id = ?", taskOrderID).First(&qc).Error; err == nil && qc.QCDetails != "" {
-		docs = append(docs, docItem{Stage: "D3", DocName: "委托检测方案(含质控)", Ref: qc.QCDetails})
+	if err := db.Where("task_order_id = ?", taskOrderID).First(&qc).Error; err == nil && !qc.QCDetails.IsEmpty() {
+		docs = append(docs, docItem{Stage: "D3", DocName: "委托检测方案(含质控)", Ref: qc.QCDetails.String()})
 	}
 
 	var field model.FieldSamplingRecord
@@ -217,8 +217,8 @@ func (h *ProjectArchiveHandler) aggregateArchiveFilesWithTx(db *gorm.DB, taskOrd
 		if field.SamplingRecordFilePath != "" {
 			docs = append(docs, docItem{Stage: "D4", DocName: "现场采样记录", Ref: field.SamplingRecordFilePath})
 		}
-		if field.EquipmentCalRecords != "" {
-			docs = append(docs, docItem{Stage: "D4", DocName: "设备校准记录", Ref: field.EquipmentCalRecords})
+		if !field.EquipmentCalRecords.IsEmpty() {
+			docs = append(docs, docItem{Stage: "D4", DocName: "设备校准记录", Ref: field.EquipmentCalRecords.String()})
 		}
 	}
 

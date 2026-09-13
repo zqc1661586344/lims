@@ -4,7 +4,6 @@ import (
 	"lims-backend/internal/config"
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/router/routes"
-	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -42,9 +41,19 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 	r.Use(cors.New(cors.Config{
 		AllowOriginFunc: func(origin string) bool {
 			if cfg.Env == "development" {
-				return strings.HasPrefix(origin, "http://localhost:") ||
-					strings.HasPrefix(origin, "http://127.0.0.1:") ||
-					strings.HasPrefix(origin, "http://0.0.0.0:")
+				allowedPorts := map[string]struct{}{
+					"http://localhost:3000": {},
+					"http://localhost:5173": {},
+					"http://localhost:8080": {},
+					"http://localhost:8081": {},
+					"http://127.0.0.1:3000": {},
+					"http://127.0.0.1:5173": {},
+					"http://127.0.0.1:8080": {},
+					"http://127.0.0.1:8081": {},
+				}
+				if _, ok := allowedPorts[origin]; ok {
+					return true
+				}
 			}
 			for _, allowed := range cfg.CORS.AllowOrigins {
 				if allowed == origin {
@@ -161,10 +170,10 @@ func preMigrateCleanup(db *gorm.DB, logger *zap.Logger, delete bool) {
 				zap.String("relation", r.name),
 				zap.Int64("rows_removed", result.RowsAffected))
 		} else {
-			logger.Error("Orphan rows detected but NOT deleted (LIMS_STRICT_CLEANUP=false)",
+			logger.Warn("Orphan rows detected but NOT deleted",
 				zap.String("relation", r.name),
 				zap.Int64("orphan_count", cnt),
-				zap.String("hint", "run LIMS_STRICT_CLEANUP=true once to clean, or repair data manually"))
+				zap.String("hint", "set LIMS_CLEANUP_ORPHANS=true to delete on next startup"))
 		}
 	}
 

@@ -50,7 +50,7 @@ func (h *DataEntryHandler) Create(c *gin.Context) {
 	item := model.DataEntry{
 		TaskOrderID:  req.TaskOrderID,
 		TestItemID:   req.TestItemID,
-		OriginalData: req.OriginalData,
+		OriginalData: model.JSONB(req.OriginalData),
 		RawRecordID:  req.RawRecordID,
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {

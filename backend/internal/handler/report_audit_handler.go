@@ -48,7 +48,7 @@ func (h *ReportAuditHandler) Create(c *gin.Context) {
 		TaskOrderID:  req.TaskOrderID,
 		AuditResult:  req.AuditResult,
 		AuditComment: req.AuditComment,
-		AuditIssues:  req.AuditIssues,
+		AuditIssues:  model.JSONB(req.AuditIssues),
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建报告审核失败: %v", err))
@@ -148,7 +148,7 @@ func (h *ReportAuditHandler) Approve(c *gin.Context) {
 			TaskOrderID:  req.TaskID,
 			AuditResult:  effectiveResult,
 			AuditComment: req.AuditComment,
-			AuditIssues:  req.AuditIssues,
+			AuditIssues:  model.JSONB(req.AuditIssues),
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
 	}); err != nil {

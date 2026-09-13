@@ -298,7 +298,7 @@ func (s *BusinessService) resolveTaskContext(tx *gorm.DB, taskID uint) (*taskCon
 // has at least one row with the specified task_order_id. Uses Gorm's native
 // FirstOrCreate for tables with unique task_order_id (all except data_entries).
 // If a row already exists it is left untouched; missing rows are inserted.
-// All jsonb-typed fields must be explicitly initialized to "{}" because
+// All jsonb-typed fields must be explicitly initialized to model.JSONB("{}") because
 // PostgreSQL rejects Go's empty-string zero value for jsonb columns.
 func (s *BusinessService) ensureBusinessRecord(tx *gorm.DB, nodeCode string, orderID uint) error {
 	switch nodeCode {
@@ -309,33 +309,33 @@ func (s *BusinessService) ensureBusinessRecord(tx *gorm.DB, nodeCode string, ord
 		var m model.QCTask
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.QCTask{
 			TaskOrderID: orderID,
-			QCDetails:   "{}",
+			QCDetails:   model.JSONB("{}"),
 		}).Error
 	case workflow.NodeSamplingSchedule:
 		var m model.SamplingSchedule
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.SamplingSchedule{
 			TaskOrderID:    orderID,
-			SamplingPoints: "{}",
-			EquipmentList:  "{}",
+			SamplingPoints: model.JSONB(model.JSONB("{}")),
+			EquipmentList:  model.JSONB("{}"),
 		}).Error
 	case workflow.NodeFieldSampling:
 		var m model.FieldSamplingRecord
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.FieldSamplingRecord{
 			TaskOrderID:         orderID,
-			SamplePhotos:        "{}",
-			EquipmentCalRecords: "{}",
+			SamplePhotos:        model.JSONB("{}"),
+			EquipmentCalRecords: model.JSONB(model.JSONB("{}")),
 		}).Error
 	case workflow.NodeSampleReceiving:
 		var m model.SampleReceiving
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.SampleReceiving{
 			TaskOrderID: orderID,
-			SampleCodes: "{}",
+			SampleCodes: model.JSONB(model.JSONB("{}")),
 		}).Error
 	case workflow.NodeTaskAssign:
 		var m model.TaskAssign
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.TaskAssign{
 			TaskOrderID:  orderID,
-			TestItemList: "{}",
+			TestItemList: model.JSONB(model.JSONB("{}")),
 		}).Error
 	case workflow.NodeDataEntry:
 		var testItemIDs []uint
@@ -384,7 +384,7 @@ func (s *BusinessService) ensureBusinessRecord(tx *gorm.DB, nodeCode string, ord
 			if err := tx.Create(&model.DataEntry{
 				TaskOrderID:  orderID,
 				TestItemID:   tid,
-				OriginalData: "{}",
+				OriginalData: model.JSONB(model.JSONB("{}")),
 			}).Error; err != nil {
 				return err
 			}
@@ -394,39 +394,39 @@ func (s *BusinessService) ensureBusinessRecord(tx *gorm.DB, nodeCode string, ord
 		var m model.DataReview
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.DataReview{
 			TaskOrderID: orderID,
-			IssuesFound: "{}",
+			IssuesFound: model.JSONB(model.JSONB("{}")),
 		}).Error
 	case workflow.NodeDataAudit:
 		var m model.DataAudit
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.DataAudit{
 			TaskOrderID: orderID,
-			IssueList:   "{}",
+			IssueList:   model.JSONB("{}"),
 		}).Error
 	case workflow.NodeReportPrepare:
 		var m model.ReportPrepare
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.ReportPrepare{
 			TaskOrderID:   orderID,
 			ReportTitle:   "待编制",
-			ReportContent: "{}",
-			Attachments:   "{}",
+			ReportContent: model.JSONB(model.JSONB("{}")),
+			Attachments:   model.JSONB("{}"),
 		}).Error
 	case workflow.NodeReportReview:
 		var m model.ReportReview
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.ReportReview{
 			TaskOrderID:   orderID,
-			ReviewedItems: "{}",
+			ReviewedItems: model.JSONB(model.JSONB("{}")),
 		}).Error
 	case workflow.NodeReportAudit:
 		var m model.ReportAudit
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.ReportAudit{
 			TaskOrderID: orderID,
-			AuditIssues: "{}",
+			AuditIssues: model.JSONB(model.JSONB("{}")),
 		}).Error
 	case workflow.NodeReportSign:
 		var m model.ReportSign
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.ReportSign{
 			TaskOrderID: orderID,
-			RawRecords:  "{}",
+			RawRecords:  model.JSONB("{}"),
 		}).Error
 	case workflow.NodeReportPrint:
 		var m model.ReportPrint
@@ -435,7 +435,7 @@ func (s *BusinessService) ensureBusinessRecord(tx *gorm.DB, nodeCode string, ord
 		var m model.ProjectArchive
 		return tx.Where("task_order_id = ?", orderID).FirstOrCreate(&m, model.ProjectArchive{
 			TaskOrderID:  orderID,
-			ArchiveFiles: "{}",
+			ArchiveFiles: model.JSONB(model.JSONB("{}")),
 		}).Error
 	}
 	return nil
@@ -445,14 +445,14 @@ func (s *BusinessService) ensureBusinessRecord(tx *gorm.DB, nodeCode string, ord
 // JSON-encoded strings (frontend uses JSON.stringify per item). Example stored value:
 //
 //	["{\"test_item_id\":1,\"name\":\"pH\"}", "{\"test_item_id\":2,\"name\":\"COD\"}"]
-func parseTestItemIDs(raw string) ([]uint, error) {
+func parseTestItemIDs(raw model.JSONB) ([]uint, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
 	var outer []string
-	if err := json.Unmarshal([]byte(raw), &outer); err != nil {
+	if err := json.Unmarshal(raw, &outer); err != nil {
 		var outer2 []map[string]interface{}
-		if err2 := json.Unmarshal([]byte(raw), &outer2); err2 == nil {
+		if err2 := json.Unmarshal(raw, &outer2); err2 == nil {
 			for _, m := range outer2 {
 				if v, ok := m["test_item_id"].(float64); ok && uint(v) > 0 {
 				}
@@ -499,7 +499,7 @@ func (s *BusinessService) ensureLabSheetsForOrder(tx *gorm.DB, orderID uint, tes
 
 		var tpl model.LabSheetTemplate
 		var templateID *uint
-		var sheetData json.RawMessage = []byte("{}")
+		var sheetData json.RawMessage = []byte(model.JSONB("{}"))
 		if err := tx.Where("test_item_id = ? AND status = 1", it).
 			Order("version DESC").First(&tpl).Error; err == nil {
 			templateID = &tpl.ID

@@ -49,9 +49,9 @@ func (h *ReportPrepareHandler) Create(c *gin.Context) {
 	item := model.ReportPrepare{
 		TaskOrderID:   req.TaskOrderID,
 		ReportTitle:   req.ReportTitle,
-		ReportContent: req.ReportContent,
+		ReportContent: model.JSONB(req.ReportContent),
 		ReportFile:    req.ReportFile,
-		Attachments:   req.Attachments,
+		Attachments:   model.JSONB(req.Attachments),
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建报告编制失败: %v", err))
@@ -155,9 +155,9 @@ func (h *ReportPrepareHandler) Approve(c *gin.Context) {
 			ReportNo:       req.ReportNo,
 			PrepareOpinion: req.PrepareOpinion,
 			ReportTitle:    req.ReportTitle,
-			ReportContent:  req.ReportContent,
+			ReportContent:  model.JSONB(req.ReportContent),
 			ReportFile:     req.ReportFile,
-			Attachments:    req.Attachments,
+			Attachments:    model.JSONB(req.Attachments),
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
 	}); err != nil {

@@ -169,7 +169,7 @@ func (h *ReportSignHandler) Approve(c *gin.Context) {
 			PrepareOpinion: prepareOpinion,
 			ReviewOpinion:  reviewOpinion,
 			AuditOpinion:   auditOpinion,
-			RawRecords:     rawRecords,
+			RawRecords:     model.JSONB(rawRecords),
 			SignResult:     effectiveResult,
 			SignComment:    req.SignComment,
 			SignerName:     req.SignerName,
@@ -210,7 +210,7 @@ func (h *ReportSignHandler) aggregateSignSlipWithTx(db *gorm.DB, taskOrderID uin
 		}
 		list := make([]rawRec, 0, len(entries))
 		for _, e := range entries {
-			list = append(list, rawRec{TestItemID: e.TestItemID, OriginalData: e.OriginalData})
+			list = append(list, rawRec{TestItemID: e.TestItemID, OriginalData: e.OriginalData.String()})
 		}
 		if b, err := json.Marshal(list); err == nil {
 			rawRecords = string(b)

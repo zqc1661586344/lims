@@ -9,19 +9,17 @@ import (
 
 // PermissionMiddleware checks if the current user has the required permission code.
 // Pass one or more permission codes — user needs at least one to pass.
-// Permissions are read directly from the JWT claims (no DB query).
 //
-// Admin users bypass this middleware (they are expected to hold every business
-// permission). DeptScopeMiddleware still limits admins to their own department
-// so CNAS duty-separation rules are preserved.
+// Permission codes are read from the Gin context (populated by AuthMiddleware
+// on every request from the DB, so role changes take effect immediately).
+//
+// Admin users are NOT exempt — they must also hold the permission code.
+// AuthMiddleware grants admins every permission code, so admins will always
+// pass this check, but DeptScopeMiddleware (department) and workflow SoD rules
+// still apply to them.
 func PermissionMiddleware(db *gorm.DB, codes ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if len(codes) == 0 {
-			c.Next()
-			return
-		}
-
-		if IsAdmin(c) {
 			c.Next()
 			return
 		}

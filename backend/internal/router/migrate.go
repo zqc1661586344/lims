@@ -11,8 +11,13 @@ import (
 func RunAutoMigrate(logger *zap.Logger, db *gorm.DB) {
 	logger.Info("running AutoMigrate to create/update tables")
 
-	strictCleanup := os.Getenv("LIMS_STRICT_CLEANUP") != "false"
-	preMigrateCleanup(db, logger, strictCleanup)
+	shouldDelete := os.Getenv("LIMS_CLEANUP_ORPHANS") == "true"
+	if shouldDelete {
+		logger.Warn("orphan row cleanup ENABLED — this will DELETE data; set LIMS_CLEANUP_ORPHANS=false to skip")
+	} else {
+		logger.Info("orphan row cleanup is disabled (set LIMS_CLEANUP_ORPHANS=true to enable)")
+	}
+	preMigrateCleanup(db, logger, shouldDelete)
 
 	db.AutoMigrate(
 		&model.User{},

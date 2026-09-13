@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { ElMessage } from 'element-plus'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -19,12 +20,16 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/index.vue'),
         meta: { title: '工作台', icon: 'Odometer' },
       },
-      {
-        path: 'univer-test',
-        name: 'UniverTest',
-        component: () => import('@/views/test/UniverTest.vue'),
-        meta: { title: 'Univer渲染测试', icon: 'DataAnalysis' },
-      },
+      ...(import.meta.env.DEV
+        ? [
+            {
+              path: 'univer-test',
+              name: 'UniverTest',
+              component: () => import('@/views/test/UniverTest.vue'),
+              meta: { title: 'Univer渲染测试', icon: 'DataAnalysis', noAuth: true },
+            } as RouteRecordRaw,
+          ]
+        : []),
       {
         path: 'system/users',
         name: 'SystemUsers',
@@ -190,6 +195,12 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/403',
+    name: 'Forbidden',
+    component: () => import('@/views/error/403.vue'),
+    meta: { title: '无权访问', noAuth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/error/404.vue'),
@@ -201,6 +212,17 @@ const router = createRouter({
   history: createWebHistory(),
   routes,
 })
+
+type PermissionMeta = string | string[] | undefined
+
+function checkPermission(userStore: ReturnType<typeof useUserStore>, meta: PermissionMeta): { ok: boolean; required: string } {
+  if (!meta) return { ok: true, required: '' }
+  if (Array.isArray(meta)) {
+    const ok = userStore.hasAnyPermission(meta)
+    return { ok, required: meta.join(' 或 ') }
+  }
+  return { ok: userStore.hasPermission(meta), required: meta }
+}
 
 router.beforeEach((to, _from, next) => {
   if (to.meta.noAuth) {
@@ -221,9 +243,10 @@ router.beforeEach((to, _from, next) => {
     return
   }
 
-  const requiredPerm = to.meta.permission as string | undefined
-  if (requiredPerm && !userStore.hasPermission(requiredPerm)) {
-    next('/dashboard')
+  const { ok, required } = checkPermission(userStore, to.meta.permission as PermissionMeta)
+  if (!ok) {
+    ElMessage.warning(`您没有访问此页面的权限${required ? '（需要：' + required + '）' : ''}`)
+    next({ path: '/403', query: { from: to.fullPath, perm: required } })
     return
   }
 

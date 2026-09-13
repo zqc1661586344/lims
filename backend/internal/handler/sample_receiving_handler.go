@@ -48,7 +48,7 @@ func (h *SampleReceivingHandler) Create(c *gin.Context) {
 	item := model.SampleReceiving{
 		TaskOrderID:         req.TaskOrderID,
 		SampleCondition:     req.SampleCondition,
-		SampleCodes:         req.SampleCodes,
+		SampleCodes:         model.JSONB(req.SampleCodes),
 		ReceivingRecordPath: req.ReceivingRecordPath,
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
@@ -152,7 +152,7 @@ func (h *SampleReceivingHandler) Approve(c *gin.Context) {
 		rec := model.SampleReceiving{
 			TaskOrderID:         req.TaskID,
 			SampleCondition:     req.SampleCondition,
-			SampleCodes:         req.SampleCodes,
+			SampleCodes:         model.JSONB(req.SampleCodes),
 			ReceivingRecordPath: req.ReceivingRecordPath,
 		}
 		if err := tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error; err != nil {

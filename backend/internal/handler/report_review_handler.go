@@ -48,7 +48,7 @@ func (h *ReportReviewHandler) Create(c *gin.Context) {
 		TaskOrderID:   req.TaskOrderID,
 		ReviewResult:  req.ReviewResult,
 		ReviewComment: req.ReviewComment,
-		ReviewedItems: req.ReviewedItems,
+		ReviewedItems: model.JSONB(req.ReviewedItems),
 	}
 	if err := h.GetDB(c).Create(&item).Error; err != nil {
 		utils.InternalError(c, fmt.Sprintf("创建报告复核失败: %v", err))
@@ -148,7 +148,7 @@ func (h *ReportReviewHandler) Approve(c *gin.Context) {
 			TaskOrderID:   req.TaskID,
 			ReviewResult:  effectiveResult,
 			ReviewComment: req.ReviewComment,
-			ReviewedItems: req.ReviewedItems,
+			ReviewedItems: model.JSONB(req.ReviewedItems),
 		}
 		return tx.Where("task_order_id = ?", req.TaskID).Assign(rec).FirstOrCreate(&rec).Error
 	}); err != nil {

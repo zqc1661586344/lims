@@ -3,9 +3,9 @@ package workflow
 import (
 	"errors"
 	"fmt"
-	"lims-backend/internal/middleware"
 	"lims-backend/internal/model"
 	"sync"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -48,18 +48,13 @@ var (
 // (in the same audit chain) whose assignees must differ from the
 // current operator.
 var sodCheckNodes = map[string][]string{
-	NodeDataReview:   {NodeDataEntry},
-	NodeDataAudit:    {NodeDataEntry, NodeDataReview},
-	NodeReportReview: {NodeReportPrepare},
-	NodeReportAudit:  {NodeReportPrepare, NodeReportReview},
-}
-
-func ctxIsAdmin(tx *gorm.DB) bool {
-	if tx == nil || tx.Statement.Context == nil {
-		return false
-	}
-	v, _ := tx.Statement.Context.Value(middleware.CtxIsAdmin).(bool)
-	return v
+	NodeContractReview:  {NodeTaskCreate},
+	NodeSampleReceiving: {NodeFieldSampling},
+	NodeDataReview:      {NodeDataEntry},
+	NodeDataAudit:       {NodeDataEntry, NodeDataReview},
+	NodeReportReview:    {NodeReportPrepare},
+	NodeReportAudit:     {NodeReportPrepare, NodeReportReview},
+	NodeReportSign:      {NodeReportPrepare},
 }
 
 // NewEngine creates a new workflow engine with the given GORM DB.
@@ -125,11 +120,10 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDe
 	if task.Status != TaskStatusPending {
 		return ErrTaskAlreadyCompleted
 	}
-	isAdmin := ctxIsAdmin(tx)
-	if !isAdmin && task.AssigneeDeptID != userDeptID {
+	if task.AssigneeDeptID != userDeptID {
 		return ErrDeptNotMatch
 	}
-	if !isAdmin && task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
+	if task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
 		return ErrAssigneeNotMatch
 	}
 	if err := e.checkSoD(tx, task.ProcessInstanceID, task.NodeCode, userID); err != nil {
@@ -220,11 +214,10 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDep
 	if task.Status != TaskStatusPending {
 		return ErrTaskAlreadyCompleted
 	}
-	isAdmin := ctxIsAdmin(tx)
-	if !isAdmin && task.AssigneeDeptID != userDeptID {
+	if task.AssigneeDeptID != userDeptID {
 		return ErrDeptNotMatch
 	}
-	if !isAdmin && task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
+	if task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
 		return ErrAssigneeNotMatch
 	}
 	if err := e.checkSoD(tx, task.ProcessInstanceID, task.NodeCode, userID); err != nil {
@@ -294,37 +287,37 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDep
 }
 
 // GetPendingTasksByUser returns all pending tasks assigned to a specific user.
-func (e *Engine) GetPendingTasksByUser(userID uint) ([]map[string]interface{}, error) {
-	tasks, err := e.queryTasks(`
+func (e *Engine) GetPendingTasksByUser(userID uint) ([]PendingTaskDTO, error) {
+	var tasks []PendingTaskDTO
+	err := e.db.Raw(`
 		SELECT pt.id, pt.node_code, pt.node_name, pt.created_at,
 			pi.title, pi.business_type, pi.business_id, pi.id as process_instance_id
 		FROM process_tasks pt
 		JOIN process_instances pi ON pi.id = pt.process_instance_id
 		WHERE pt.status = 'pending' AND pt.assignee_user_id = ?
-		ORDER BY pt.created_at DESC`, userID)
+		ORDER BY pt.created_at DESC`, userID).Scan(&tasks).Error
 	e.attachNextNode(tasks)
 	return tasks, err
 }
 
-// GetPendingTasksByDept returns all pending tasks assigned to a department.
-func (e *Engine) GetPendingTasksByDept(deptID uint) ([]map[string]interface{}, error) {
-	tasks, err := e.queryTasks(`
+func (e *Engine) GetPendingTasksByDept(deptID uint) ([]PendingTaskDTO, error) {
+	var tasks []PendingTaskDTO
+	err := e.db.Raw(`
 		SELECT pt.id, pt.node_code, pt.node_name, pt.created_at,
 			pi.title, pi.business_type, pi.business_id, pi.id as process_instance_id,
-			d.name as dept_name
+			d.name as dept_name, pt.assignee_dept_id
 		FROM process_tasks pt
 		JOIN process_instances pi ON pi.id = pt.process_instance_id
 		LEFT JOIN depts d ON d.id = pt.assignee_dept_id
 		WHERE pt.status = 'pending' AND pt.assignee_dept_id = ?
-		ORDER BY pt.created_at DESC`, deptID)
+		ORDER BY pt.created_at DESC`, deptID).Scan(&tasks).Error
 	e.attachNextNode(tasks)
 	return tasks, err
 }
 
-// GetAllPendingTasks returns ALL pending tasks across every department.
-// Used by admin (cross-department view). Non-admin users should never call this.
-func (e *Engine) GetAllPendingTasks() ([]map[string]interface{}, error) {
-	tasks, err := e.queryTasks(`
+func (e *Engine) GetAllPendingTasks() ([]PendingTaskDTO, error) {
+	var tasks []PendingTaskDTO
+	err := e.db.Raw(`
 		SELECT pt.id, pt.node_code, pt.node_name, pt.created_at,
 			pi.title, pi.business_type, pi.business_id, pi.id as process_instance_id,
 			pt.assignee_dept_id, d.name as dept_name
@@ -332,24 +325,21 @@ func (e *Engine) GetAllPendingTasks() ([]map[string]interface{}, error) {
 		JOIN process_instances pi ON pi.id = pt.process_instance_id
 		LEFT JOIN depts d ON d.id = pt.assignee_dept_id
 		WHERE pt.status = 'pending'
-		ORDER BY pt.created_at DESC`)
+		ORDER BY pt.created_at DESC`).Scan(&tasks).Error
 	e.attachNextNode(tasks)
 	return tasks, err
 }
 
-// attachNextNode appends next_node / next_node_name / next_dept_name to each pending task row.
-// The next node (from the workflow definition) is displayed on the frontend so
-// operators know which node the task advances to after approval.
-func (e *Engine) attachNextNode(tasks []map[string]interface{}) {
+func (e *Engine) attachNextNode(tasks []PendingTaskDTO) {
 	deptNames := e.deptNameMap()
-	for _, t := range tasks {
-		code, _ := t["node_code"].(string)
-		if def, ok := e.nodeMap[code]; ok && def.NextNode != "" {
+	for i := range tasks {
+		t := &tasks[i]
+		if def, ok := e.nodeMap[t.NodeCode]; ok && def.NextNode != "" {
 			if next, ok2 := e.nodeMap[def.NextNode]; ok2 {
-				t["next_node"] = next.Code
-				t["next_node_name"] = next.Name
+				t.NextNode = next.Code
+				t.NextNodeName = next.Name
 				if name, ok3 := deptNames[next.DeptCode]; ok3 {
-					t["next_dept_name"] = name
+					t.NextDeptName = name
 				}
 			}
 		}
@@ -441,56 +431,59 @@ func (e *Engine) GetPendingTaskIDByOrderTx(tx *gorm.DB, orderID uint) (uint, err
 // GetProcessHistory returns the full task history for a process instance.
 // The returned fields are aliased to match the frontend TimelineNode shape
 // (name/time/status/active/operator/dept/comment) so no client-side mapping is needed.
-func (e *Engine) GetProcessHistory(instanceID uint) ([]map[string]interface{}, error) {
-	history, err := e.queryTasks(`
+func (e *Engine) GetProcessHistory(instanceID uint) ([]ProcessHistoryDTO, error) {
+	type row struct {
+		ID          uint      `gorm:"column:id"`
+		NodeCode    string    `gorm:"column:node_code"`
+		Name        string    `gorm:"column:name"`
+		Status      string    `gorm:"column:status"`
+		Comment     string    `gorm:"column:comment"`
+		Operator    string    `gorm:"column:operator"`
+		Dept        string    `gorm:"column:dept"`
+		Time        time.Time `gorm:"column:created_at"`
+		CurrentNode string    `gorm:"column:current_node"`
+	}
+	var rows []row
+	if err := e.db.Raw(`
 		SELECT pt.id, pt.node_code, pt.node_name AS name, pt.status, pt.comment,
-			pt.assignee_user_id, u.username AS operator, d.name AS dept,
+			u.username AS operator, d.name AS dept,
 			pt.created_at, pi.current_node
 		FROM process_tasks pt
 		JOIN process_instances pi ON pi.id = pt.process_instance_id
 		LEFT JOIN users u ON u.id = pt.assignee_user_id
 		LEFT JOIN depts d ON d.id = pt.assignee_dept_id
 		WHERE pt.process_instance_id = ?
-		ORDER BY pt.id ASC`, instanceID)
-
-	// Normalize into the shape the frontend ProcessTimeline expects.
-	for _, row := range history {
-		row["time"] = row["created_at"]
-		delete(row, "created_at")
-		row["active"] = row["current_node"] == row["node_code"]
-		delete(row, "current_node")
-		delete(row, "node_code")
-		delete(row, "id")
-		delete(row, "assignee_user_id")
+		ORDER BY pt.id ASC`, instanceID).Scan(&rows).Error; err != nil {
+		return nil, err
 	}
-	return history, err
+	history := make([]ProcessHistoryDTO, 0, len(rows))
+	for _, r := range rows {
+		history = append(history, ProcessHistoryDTO{
+			Name:     r.Name,
+			Status:   r.Status,
+			Comment:  r.Comment,
+			Operator: r.Operator,
+			Dept:     r.Dept,
+			Time:     r.Time,
+			Active:   r.CurrentNode == r.NodeCode,
+			NodeCode: r.NodeCode,
+		})
+	}
+	return history, nil
 }
 
-// GetInstance returns a process instance by ID.
-func (e *Engine) GetInstance(instanceID uint) (map[string]interface{}, error) {
-	var result map[string]interface{}
-	rows, err := e.db.Raw(`SELECT id, business_type, business_id, title,
+func (e *Engine) GetInstance(instanceID uint) (*ProcessInstanceDTO, error) {
+	var result ProcessInstanceDTO
+	err := e.db.Raw(`SELECT id, business_type, business_id, title,
 		current_node, status, created_by, created_at, updated_at
-		FROM process_instances WHERE id=?`, instanceID).Rows()
+		FROM process_instances WHERE id=?`, instanceID).Scan(&result).Error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	if rows.Next() {
-		result = make(map[string]interface{})
-		cols, _ := rows.Columns()
-		vals := make([]interface{}, len(cols))
-		for i := range vals {
-			vals[i] = new(interface{})
-		}
-		rows.Scan(vals...)
-		for i, col := range cols {
-			result[col] = *(vals[i].(*interface{}))
-		}
+	if result.ID == 0 {
+		return nil, nil
 	}
-
-	return result, nil
+	return &result, nil
 }
 
 // GetProgressByBusiness returns the workflow progress for a given business object.
@@ -500,7 +493,7 @@ func (e *Engine) GetInstance(instanceID uint) (map[string]interface{}, error) {
 // Access control: admins and the instance creator always have access; other
 // users may view the progress if any task in this instance is assigned to
 // their department.
-func (e *Engine) GetProgressByBusiness(businessType string, businessID uint, userID uint, userDeptID uint, isAdmin bool) (map[string]interface{}, error) {
+func (e *Engine) GetProgressByBusiness(businessType string, businessID uint, userID uint, userDeptID uint, isAdmin bool) (*ProgressDTO, error) {
 	var instance model.ProcessInstance
 	if err := e.db.Where("business_type = ? AND business_id = ?", businessType, businessID).
 		Order("id DESC").First(&instance).Error; err != nil {
@@ -520,19 +513,16 @@ func (e *Engine) GetProgressByBusiness(businessType string, businessID uint, use
 
 	nodeDefs := GetDefinition()
 	taskStatusMap := make(map[string]string)
-	taskInfoMap := make(map[string]map[string]interface{})
+	taskCommentMap := make(map[string]string)
 
 	var tasks []model.ProcessTask
 	e.db.Where("process_instance_id = ?", instance.ID).Find(&tasks)
 	for _, t := range tasks {
 		taskStatusMap[t.NodeCode] = t.Status
-		taskInfoMap[t.NodeCode] = map[string]interface{}{
-			"status":  t.Status,
-			"comment": t.Comment,
-		}
+		taskCommentMap[t.NodeCode] = t.Comment
 	}
 
-	nodes := make([]map[string]interface{}, 0, len(nodeDefs))
+	nodes := make([]NodeProgressDTO, 0, len(nodeDefs))
 	currentNodeIndex := -1
 	for i, def := range nodeDefs {
 		nodeStatus := "pending"
@@ -549,32 +539,30 @@ func (e *Engine) GetProgressByBusiness(businessType string, businessID uint, use
 			}
 		}
 
-		node := map[string]interface{}{
-			"code":       def.Code,
-			"name":       def.Name,
-			"dept_code":  def.DeptCode,
-			"index":      i,
-			"status":     nodeStatus,
-			"can_reject": def.CanReject,
-			"has_task":   taskStatusMap[def.Code] != "",
+		node := NodeProgressDTO{
+			Code:      def.Code,
+			Name:      def.Name,
+			DeptCode:  def.DeptCode,
+			Index:     i,
+			Status:    nodeStatus,
+			CanReject: def.CanReject,
+			HasTask:   taskStatusMap[def.Code] != "",
 		}
-		if info, ok := taskInfoMap[def.Code]; ok {
-			if c, ok := info["comment"]; ok {
-				node["comment"] = c
-			}
+		if c, ok := taskCommentMap[def.Code]; ok {
+			node.Comment = c
 		}
 		nodes = append(nodes, node)
 	}
 
-	progress := map[string]interface{}{
-		"instance_id":        instance.ID,
-		"current_node":       instance.CurrentNode,
-		"current_node_index": currentNodeIndex,
-		"total_nodes":        len(nodeDefs),
-		"status":             instance.Status,
-		"title":              instance.Title,
-		"created_at":         instance.CreatedAt,
-		"nodes":              nodes,
+	progress := &ProgressDTO{
+		InstanceID:       instance.ID,
+		CurrentNode:      instance.CurrentNode,
+		CurrentNodeIndex: currentNodeIndex,
+		TotalNodes:       len(nodeDefs),
+		Status:           instance.Status,
+		Title:            instance.Title,
+		CreatedAt:        instance.CreatedAt,
+		Nodes:            nodes,
 	}
 	return progress, nil
 }
@@ -664,30 +652,6 @@ func (e *Engine) createTaskWithTx(tx *gorm.DB, instanceID uint, nodeCode, nodeNa
 		Status:            TaskStatusPending,
 		Version:           0,
 	}).Error
-}
-
-func (e *Engine) queryTasks(query string, args ...interface{}) ([]map[string]interface{}, error) {
-	rows, err := e.db.Raw(query, args...).Rows()
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []map[string]interface{}
-	cols, _ := rows.Columns()
-	for rows.Next() {
-		vals := make([]interface{}, len(cols))
-		for i := range vals {
-			vals[i] = new(interface{})
-		}
-		rows.Scan(vals...)
-		row := make(map[string]interface{})
-		for i, col := range cols {
-			row[col] = *(vals[i].(*interface{}))
-		}
-		results = append(results, row)
-	}
-	return results, nil
 }
 
 func (e *Engine) resolveAssigneeForNode(tx *gorm.DB, deptID uint, roleCode string) uint {
