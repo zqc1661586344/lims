@@ -2,7 +2,7 @@
 
 基于 Go + Vue 3 的第三方检测实验室综合管理系统，覆盖从委托登记到报告归档的全流程管理，满足 CNAS 认证合规要求。
 
-> **当前开发进度：Phase 1-9 已完成，Phase 10（检验单集成）进行中**（项目骨架 → 全流程 16 节点贯通 → Univer Sheet 检验单编辑）
+> **当前开发进度：Phase 1-9、Phase 11 已完成，Phase 10（检验单集成）进行中**（项目骨架 → 全流程 16 节点贯通 → 权限加固与安全审计 → Univer Sheet 检验单编辑）
 
 ---
 
@@ -51,7 +51,7 @@
 ### 业务流程（16 节点全流程）
 
 ```
-业务室(1 任务委托) → 技术室(2 合同评审) → 质控室(3 质控任务) → 现场室(4 采样调度)
+业务室(1 任务创建) → 技术室(2 合同评审) → 质控室(3 质控任务) → 现场室(4 采样调度)
     → 现场室(5 现场采样) → 样品室(6 样品接收) → 实验室(7-10 任务分配/数据录入/数据复核/数据审核)
     → 报告室(11 报告编制) → 实验室(12 报告复核) → 质控室(13 报告审核) → 技术室(14 报告签发)
     → 业务室(15 报告发放) → 报告室(16 项目归档)
@@ -59,7 +59,7 @@
 
 | 步骤 | 节点 | 责任部门 | 说明 | 产出文档 |
 |---|---|---|---|---|
-| 1 | 任务委托 | 业务室 | 录入客户/项目/样品/检测项目，启动流程 | D1 委托任务单 |
+| 1 | 任务创建 | 业务室 | 录入客户/项目/样品/检测项目，启动流程 | D1 委托任务单 |
 | 2 | 合同评审 | 技术室 | 评审合同/协议 | D2 检测合同/协议 |
 | 3 | 质控任务 | 质控室 | 检测任务中加入质控方案 | D3 委托检测方案 |
 | 4 | 采样调度 | 现场室 | 安排采样团队/点位/设备 | — |
@@ -95,6 +95,7 @@
 | 日志 | Zap | 结构化日志 |
 | 权限 | 自定义 RBAC | 基于用户/角色/权限的访问控制 |
 | 审计 | GORM Plugin | 自动记录数据变更审计日志 |
+| 对象存储 | minio-go/v7 | MinIO SDK：文件上传/下载/预签名 URL |
 
 ### 前端
 
@@ -126,7 +127,7 @@
 ```
 /Users/zz/LanguagePath/go/lims/
 ├── backend/                              # Go 后端项目
-│   ├── cmd/server/main.go               # 应用入口：config → logger → DB → seed → router → serve
+│   ├── cmd/server/main.go               # 应用入口：config → logger → DB → MinIO Storage → router.Setup → seed → serve
 │   ├── config/
 │   │   ├── config.yaml                  # 默认配置
 │   │   └── config.dev.yaml              # 开发环境配置
@@ -134,7 +135,9 @@
 │   │   ├── config/config.go             # Viper 配置加载
 │   │   ├── middleware/
 │   │   │   ├── auth.go                  # JWT 认证中间件
-│   │   │   ├── permission.go            # RBAC 权限中间件
+│   │   │   ├── permission.go            # RBAC 权限中间件（admin 自动绕过）
+│   │   │   ├── dept_scope.go            # 部门范围校验中间件（admin 自动绕过）
+│   │   │   ├── ratelimit.go             # 登录限流（防暴力破解，5min/20次 + 失败独立计数）
 │   │   │   ├── logger.go                # 请求日志
 │   │   │   ├── recovery.go              # 异常恢复
 │   │   │   ├── audit.go                 # GORM 审计插件
@@ -145,22 +148,33 @@
 │   │   │   ├── base_data.go             # 基础数据模型（检测项目/标准/设备/试剂）
 │   │   │   ├── workflow.go              # 流程实例/任务模型
 │   │   │   ├── business_models.go       # 16 节点业务模型
-│   │   │   └── lab_sheet.go             # 🆕 LabSheet + LabSheetTemplate 模型（Univer Sheet 存储）
+│   │   │   ├── jsonb.go                 # JSONB 自定义类型（Value/Scan/Marshal，空值统一为 "{}"）
+│   │   │   ├── file.go                  # 文件元信息模型（MinIO 对象键 + 业务关联）
+│   │   │   ├── sample.go                # 样品模型
+│   │   │   ├── lab_sheet.go             # LabSheet + LabSheetTemplate（Univer Sheet 存储）
+│   │   │   └── sampling_sheet.go        # 采样单模板 + 实例
 │   │   ├── handler/
+│   │   │   ├── generic.go               # 通用 CRUD Handler 基类（含 GetWithScope 行级权限）
 │   │   │   ├── auth_handler.go          # 登录/登出/刷新/profile
 │   │   │   ├── base_data_handler.go     # 基础数据 CRUD
-│   │   │   ├── workflow_handler.go      # 工作流 HTTP 接口
-│   │   │   ├── lab_sheet_handler.go     # 🆕 检验单 CRUD + 模板管理
+│   │   │   ├── workflow_handler.go      # 工作流 HTTP 接口（含实例访问 canAccessInstance）
+│   │   │   ├── business_handler.go      # 业务通用 handler
+│   │   │   ├── file_handler.go          # 文件上传/列表/下载/删除（MinIO 预签名 URL）
+│   │   │   ├── lab_sheet_handler.go     # 检验单 CRUD + 模板管理
+│   │   │   ├── sampling_sheet_handler.go # 采样单 CRUD + 模板管理
 │   │   │   ├── {node}_handler.go        # 16 节点各自独立 handler
 │   │   │   └── system/                  # RBAC 控制器（user/dept/role/permission）
 │   │   ├── service/
+│   │   │   ├── storage.go               # StorageService 接口（MinIO 实现 + Noop 降级）
+│   │   │   ├── scope.go                 # GORM Scope 行级权限（ApplyTaskOrderScope / ApplyTaskOrderSelfScope）
 │   │   │   ├── workflow_service.go      # 工作流服务封装
 │   │   │   └── business_service.go      # 业务服务封装
 │   │   ├── workflow/                    # 自研状态机引擎（系统核心）
-│   │   │   ├── engine.go               # 核心引擎（启动/审批/驳回/待办）
+│   │   │   ├── engine.go               # 核心引擎（启动/审批/驳回/待办，admin 绕过部门校验但保留 SoD）
 │   │   │   ├── definition.go           # 16 节点流程定义
 │   │   │   ├── state.go                # 节点与部门代码常量
 │   │   │   ├── transition.go           # 流转规则逻辑
+│   │   │   ├── dto.go                  # 工作流请求/响应 DTO
 │   │   │   └── errors.go               # 流程错误定义
 │   │   ├── router/
 │   │   │   ├── router.go               # 主路由 + 自动迁移
@@ -169,12 +183,15 @@
 │   │   │       ├── base_data_routes.go  # 基础数据路由
 │   │   │       ├── workflow_routes.go   # 工作流路由
 │   │   │       ├── business_routes.go   # 16 业务节点路由
-│   │   │       └── lab_sheet_routes.go  # 🆕 检验单 + 模板路由
-│   │   ├── seed/seed.go                 # 初始数据：7 部门 + admin 用户
+│   │   │       ├── lab_sheet_routes.go  # 检验单 + 模板路由
+│   │   │       ├── sampling_sheet_routes.go # 采样单 + 模板路由
+│   │   │       └── file_routes.go       # 文件上传/列表/下载/删除路由
+│   │   ├── seed/seed.go                 # 初始数据：7 部门 + admin + 14 业务角色 + 权限码（幂等，Replace 关联）
 │   │   └── utils/
 │   │       ├── jwt.go                   # JWT 工具
 │   │       ├── password.go              # bcrypt 密码
-│   │       └── response.go              # 统一响应格式
+│   │       ├── response.go              # 统一响应格式
+│   │       └── token_blacklist.go       # Token 黑名单（登出用）
 │   ├── Dockerfile                       # 多阶段构建
 │   ├── go.mod
 │   └── go.sum
@@ -189,9 +206,10 @@
 │   │   ├── components/                  # 通用业务组件
 │   │   │   ├── ApprovalDialog.vue      # 审批弹窗（所有节点共用）
 │   │   │   ├── TaskList.vue            # 待办任务列表
+│   │   │   ├── TaskProcessBar.vue      # 流程进度条
 │   │   │   ├── ProcessTimeline.vue     # 流程时间线
 │   │   │   ├── FileUpload.vue          # 文件上传
-│   │   │   └── LabSheetEditor.vue      # 🆕 通用 Univer Sheet 编辑器（支持 edit/readonly 模式）
+│   │   │   └── LabSheetEditor.vue      # 通用 Univer Sheet 编辑器（支持 edit/readonly 模式）
 │   │   ├── layouts/
 │   │   │   ├── MainLayout.vue          # 主布局（侧边栏+顶栏）
 │   │   │   └── Sidebar.vue             # 侧边导航（新菜单加这里）
@@ -241,6 +259,7 @@
 | **Phase 8** 报告工作流 | ✅ **已完成** | 节点 11-13（报告编制/复核/审核） |
 | **Phase 9** 报告签发/打印/归档 | ✅ **已完成** | 节点 14-16（报告签发/发放/归档），全流程 16 节点贯通 |
 | **Phase 10** 检验单集成 | 🔶 **进行中** | Univer Sheet 集成、LabSheet/LabSheetTemplate 模型、检验单全屏编辑页、数据录入节点对接（复核/审核节点只读模式待接入） |
+| **Phase 11** 权限加固与安全审计 | ✅ **已完成** | admin 全权限绕过（PermissionMiddleware + DeptScope + Engine）、行级数据访问 Scope（ApplyTaskOrderScope）、Workflow IDOR 防护（canAccessInstance）、登录限流加固（独立失败计数）、JSONB 空值统一、SoD 职责分离回归测试、MinIO 文件上传系统 |
 
 ---
 
@@ -277,7 +296,8 @@ cd backend && go run ./cmd/server
 
 后端服务默认监听 `localhost:8080`。
 
-> 首次启动会自动执行数据库迁移（创建表结构）和种子数据填充（7 大部门 + admin 用户）。
+> 首次启动会自动执行数据库迁移（创建表结构）和种子数据填充（7 大部门 + admin 用户 + 14 个业务角色 + 权限码树）。
+> 如果 MinIO 未启动，后端会降级运行（日志 Warning，文件上传接口不可用），不影响其他功能。
 
 ### 3. 启动前端开发服务器
 
@@ -417,7 +437,7 @@ cd frontend && npx vue-tsc --noEmit
 
 | 节点 | 资源名 | 说明 |
 |------|--------|------|
-| 1 任务委托 | `task-orders` | 含 `POST /:id/submit` 提交启动流程 |
+| 1 任务创建 | `task-orders` | 含 `POST /:id/submit` 提交启动流程 |
 | 2 合同评审 | `contract-reviews` | |
 | 3 质控任务 | `qc-tasks` | |
 | 4 采样调度 | `sampling-schedules` | |
@@ -434,7 +454,7 @@ cd frontend && npx vue-tsc --noEmit
 | 15 报告发放 | `report-print` | |
 | 16 项目归档 | `project-archive` | 自动汇聚 D1-D13 归档清单 |
 
-> 节点 2-16 均支持 `GET /:id/approve`（通过）与 `GET /:id/reject`（驳回）。任务委托（节点 1）是流程起点无审批；项目归档（节点 16）是终节点不可驳回。
+> 节点 2-16 均支持 `GET /:id/approve`（通过）与 `GET /:id/reject`（驳回）。任务创建（节点 1）是流程起点无审批；项目归档（节点 16）是终节点不可驳回。
 
 ### 检验单 (Lab Sheet / Univer Sheet)
 
@@ -457,6 +477,29 @@ cd frontend && npx vue-tsc --noEmit
 
 > `sheet_data` 为 Univer Sheet Workbook JSON（jsonb 字段），包含完整的表格结构、单元格数据和公式。
 
+### 文件管理 (Files / MinIO)
+
+文件存储在 MinIO，返回 15 分钟有效的预签名 URL 供前端直接访问。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/files/upload` | 文件上传（multipart form，50MB 限制，白名单后缀/MIME） |
+| GET | `/api/files` | 文件列表（可按 business_type/business_id/category/keyword 过滤，非 admin 自动按 creator 过滤） |
+| GET | `/api/files/:id` | 文件元信息 + 预签名 URL |
+| GET | `/api/files/:id/download` | 直接流下载（Content-Disposition attachment） |
+| DELETE | `/api/files/:id` | 删除文件（仅上传者或 admin 可操作） |
+
+> 对象键格式 `{business_type}/{uuid}_{原始文件名}`，非 admin 用户仅能访问自己上传的或关联自己部门 task_order 的文件。
+
+### 采样单 (Sampling Sheet)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/sampling-sheets/templates` | 采样单模板列表 / 创建 |
+| GET/PUT/DELETE | `/api/sampling-sheets/templates/:id` | 模板详情 / 更新 / 删除 |
+| GET/POST | `/api/sampling-sheets` | 采样单实例列表 / 创建 |
+| GET/PUT/DELETE | `/api/sampling-sheets/:id` | 实例详情 / 更新 / 删除 |
+
 ---
 
 ## 权限系统设计
@@ -465,7 +508,7 @@ cd frontend && npx vue-tsc --noEmit
 
 | 部门 | 编码 | 流程职责 |
 |------|------|---------|
-| 业务室 | `dept_business` | 任务委托、报告发放 |
+| 业务室 | `dept_business` | 任务创建、报告发放 |
 | 技术室 | `dept_tech` | 合同评审、报告签发 |
 | 质控室 | `dept_qc` | 质控任务、报告审核 |
 | 现场室 | `dept_field` | 采样调度、现场采样 |
@@ -499,10 +542,18 @@ cd frontend && npx vue-tsc --noEmit
 
 ## 后续开发路线
 
-全流程 16 节点（Phase 1-9）已全部完成，检验单集成（Phase 10）进行中。
+全流程 16 节点（Phase 1-9）已全部完成，权限加固与安全审计（Phase 11）已完成，检验单集成（Phase 10）进行中。
 
 ```
 ✅ Phase 1-9 全部完成（委托 → 报告签发/发放 → 项目归档）
+✅ Phase 11 权限加固与安全审计
+   ├── ✅ admin 全权限绕过（PermissionMiddleware / DeptScope / Workflow Engine）
+   ├── ✅ 行级数据访问（ApplyTaskOrderScope，16 业务节点 GET 全接入）
+   ├── ✅ Workflow IDOR 防护（canAccessInstance 校验流程实例归属）
+   ├── ✅ 登录限流加固（5min/20次 + 失败独立计数）
+   ├── ✅ MinIO 文件上传系统（StorageService + Noop 降级）
+   ├── ✅ JSONB 空值统一（Value/Scan/Marshal/Unmarshal 四件套 → "{}"）
+   ├── ✅ SoD 职责分离回归测试 + middleware 回归测试
 🔶 Phase 10 检验单集成（进行中）
    ├── ✅ Univer Sheet 组件封装（LabSheetEditor.vue）
    ├── ✅ LabSheet / LabSheetTemplate 数据模型 + API
