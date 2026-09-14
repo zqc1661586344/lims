@@ -13,6 +13,7 @@ import (
 	"lims-backend/internal/config"
 	"lims-backend/internal/router"
 	"lims-backend/internal/seed"
+	"lims-backend/internal/service"
 
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
@@ -47,13 +48,27 @@ func main() {
 	}
 	logger.Info("Database connected")
 
-	// 4. Setup Gin router (autoMigrate runs inside router.Setup)
-	r := router.Setup(cfg, logger, db)
+	// 4. Initialize MinIO storage (degrade gracefully if unavailable)
+	storage, err := service.NewStorageService(&cfg.MinIO, logger)
+	if err != nil {
+		logger.Warn("MinIO init failed, file upload will be unavailable", zap.Error(err))
+		storage = service.NewNoopStorage()
+	} else {
+		if err := storage.EnsureBucket(context.Background()); err != nil {
+			logger.Warn("MinIO bucket init failed, file upload will be unavailable", zap.Error(err))
+			storage = service.NewNoopStorage()
+		} else {
+			logger.Info("MinIO storage initialized", zap.String("bucket", cfg.MinIO.BucketName))
+		}
+	}
+
+	// 5. Setup Gin router (autoMigrate runs inside router.Setup)
+	r := router.Setup(cfg, logger, db, storage)
 
 	// Seed default data (must run after autoMigrate)
 	seed.Run(db, logger)
 
-	// 5. Start HTTP server
+	// 6. Start HTTP server
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler:      r,

@@ -10,14 +10,14 @@ type JSONB []byte
 
 func (j JSONB) Value() (driver.Value, error) {
 	if len(j) == 0 {
-		return nil, nil
+		return []byte("{}"), nil
 	}
 	return []byte(j), nil
 }
 
 func (j *JSONB) Scan(value interface{}) error {
 	if value == nil {
-		*j = nil
+		*j = JSONB("{}")
 		return nil
 	}
 	switch v := value.(type) {
@@ -33,7 +33,7 @@ func (j *JSONB) Scan(value interface{}) error {
 
 func (j JSONB) MarshalJSON() ([]byte, error) {
 	if len(j) == 0 {
-		return []byte("null"), nil
+		return []byte("{}"), nil
 	}
 	return []byte(j), nil
 }
@@ -43,7 +43,7 @@ func (j *JSONB) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("JSONB.UnmarshalJSON: receiver is nil")
 	}
 	if bytes.Equal(data, []byte("null")) {
-		*j = nil
+		*j = JSONB("{}")
 		return nil
 	}
 	*j = append((*j)[0:0], data...)

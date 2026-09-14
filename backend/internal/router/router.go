@@ -4,6 +4,7 @@ import (
 	"lims-backend/internal/config"
 	"lims-backend/internal/middleware"
 	"lims-backend/internal/router/routes"
+	"lims-backend/internal/service"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,7 @@ import (
 )
 
 // Setup configures the Gin router with middleware and routes.
-func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
+func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB, storage service.StorageService) *gin.Engine {
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -90,6 +91,8 @@ func Setup(cfg *config.Config, logger *zap.Logger, db *gorm.DB) *gin.Engine {
 		routes.RegisterLabSheetRoutes(api, cfg, logger, db)
 		// Register sampling sheet routes (Univer Sheet 采样单)
 		routes.RegisterSamplingSheetRoutes(api, cfg, logger, db)
+		// Register file upload routes
+		routes.RegisterFileRoutes(api, cfg, logger, db, storage)
 	}
 
 	return r

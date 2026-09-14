@@ -9,6 +9,11 @@ import (
 
 func DeptScopeMiddleware(db *gorm.DB, allowedDeptCodes ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if IsAdmin(c) {
+			c.Next()
+			return
+		}
+
 		userDeptID := GetDeptIDVal(c)
 		if userDeptID == 0 {
 			utils.Forbidden(c, "无法获取用户部门信息")

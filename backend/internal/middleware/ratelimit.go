@@ -12,6 +12,7 @@ import (
 type rateBucket struct {
 	mu          sync.Mutex
 	attempts    []time.Time
+	failures    []time.Time
 	lockedUntil time.Time
 }
 
@@ -47,13 +48,13 @@ func (b *rateBucket) record(window time.Duration, maxFailures int, lockDuration 
 	now := time.Now()
 	cutoff := now.Add(-window)
 	i := 0
-	for i < len(b.attempts) && b.attempts[i].Before(cutoff) {
+	for i < len(b.failures) && b.failures[i].Before(cutoff) {
 		i++
 	}
-	b.attempts = b.attempts[i:]
-	b.attempts = append(b.attempts, now)
+	b.failures = b.failures[i:]
+	b.failures = append(b.failures, now)
 
-	if len(b.attempts) >= maxFailures {
+	if len(b.failures) >= maxFailures {
 		b.lockedUntil = now.Add(lockDuration)
 		return true
 	}

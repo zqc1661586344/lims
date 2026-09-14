@@ -56,5 +56,6 @@ func RunAutoMigrate(logger *zap.Logger, db *gorm.DB) {
 		&model.Sample{},
 		&model.TaskOrderTestItem{},
 		&model.SamplingPoint{},
+		&model.File{},
 	)
 }

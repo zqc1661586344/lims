@@ -132,10 +132,69 @@ func TestSoDCheck_SkipsNonSoDNodes(t *testing.T) {
 
 	err := e.checkSoD(db, 1, NodeTaskCreate, 1)
 	assert.NoError(t, err)
-	err = e.checkSoD(db, 1, NodeContractReview, 1)
+	err = e.checkSoD(db, 1, NodeSamplingSchedule, 1)
 	assert.NoError(t, err)
-	err = e.checkSoD(db, 1, NodeReportSign, 1)
+	err = e.checkSoD(db, 1, NodeFieldSampling, 1)
 	assert.NoError(t, err)
+	err = e.checkSoD(db, 1, NodeTaskAssign, 1)
+	assert.NoError(t, err)
+}
+
+func TestSoDCheck_ContractReviewBlocksTaskCreator(t *testing.T) {
+	db := setupSQLiteDB(t)
+	e := NewEngine(db)
+
+	pi := model.ProcessInstance{BusinessType: "task_order", BusinessID: 1, CurrentNode: NodeContractReview, Status: "running"}
+	require.NoError(t, db.Create(&pi).Error)
+
+	require.NoError(t, db.Create(&model.ProcessTask{
+		ProcessInstanceID: pi.ID, NodeCode: NodeTaskCreate,
+		Status: "completed", AssigneeUserID: ptrUint(50),
+	}).Error)
+
+	err := e.checkSoD(db, pi.ID, NodeContractReview, 50)
+	assert.True(t, errors.Is(err, ErrSoDViolation), "task creator cannot be contract reviewer")
+
+	err = e.checkSoD(db, pi.ID, NodeContractReview, 60)
+	assert.NoError(t, err, "independent user should pass")
+}
+
+func TestSoDCheck_SampleReceivingBlocksSampler(t *testing.T) {
+	db := setupSQLiteDB(t)
+	e := NewEngine(db)
+
+	pi := model.ProcessInstance{BusinessType: "task_order", BusinessID: 1, CurrentNode: NodeSampleReceiving, Status: "running"}
+	require.NoError(t, db.Create(&pi).Error)
+
+	require.NoError(t, db.Create(&model.ProcessTask{
+		ProcessInstanceID: pi.ID, NodeCode: NodeFieldSampling,
+		Status: "completed", AssigneeUserID: ptrUint(70),
+	}).Error)
+
+	err := e.checkSoD(db, pi.ID, NodeSampleReceiving, 70)
+	assert.True(t, errors.Is(err, ErrSoDViolation), "sampler cannot be sample receiver")
+
+	err = e.checkSoD(db, pi.ID, NodeSampleReceiving, 80)
+	assert.NoError(t, err, "independent user should pass")
+}
+
+func TestSoDCheck_ReportSignBlocksPreparer(t *testing.T) {
+	db := setupSQLiteDB(t)
+	e := NewEngine(db)
+
+	pi := model.ProcessInstance{BusinessType: "task_order", BusinessID: 1, CurrentNode: NodeReportSign, Status: "running"}
+	require.NoError(t, db.Create(&pi).Error)
+
+	require.NoError(t, db.Create(&model.ProcessTask{
+		ProcessInstanceID: pi.ID, NodeCode: NodeReportPrepare,
+		Status: "completed", AssigneeUserID: ptrUint(90),
+	}).Error)
+
+	err := e.checkSoD(db, pi.ID, NodeReportSign, 90)
+	assert.True(t, errors.Is(err, ErrSoDViolation), "report preparer cannot be signer")
+
+	err = e.checkSoD(db, pi.ID, NodeReportSign, 95)
+	assert.NoError(t, err, "independent user should pass")
 }
 
 func TestSoDCheck_OnlyConsidersCompletedTasks(t *testing.T) {

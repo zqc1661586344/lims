@@ -120,12 +120,17 @@ func (e *Engine) ApproveTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDe
 	if task.Status != TaskStatusPending {
 		return ErrTaskAlreadyCompleted
 	}
-	if task.AssigneeDeptID != userDeptID {
-		return ErrDeptNotMatch
+
+	isAdmin := e.isAdminUser(tx, userID)
+	if !isAdmin {
+		if task.AssigneeDeptID != userDeptID {
+			return ErrDeptNotMatch
+		}
+		if task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
+			return ErrAssigneeNotMatch
+		}
 	}
-	if task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
-		return ErrAssigneeNotMatch
-	}
+
 	if err := e.checkSoD(tx, task.ProcessInstanceID, task.NodeCode, userID); err != nil {
 		return err
 	}
@@ -214,12 +219,17 @@ func (e *Engine) RejectTaskWithTx(tx *gorm.DB, taskID uint, userID uint, userDep
 	if task.Status != TaskStatusPending {
 		return ErrTaskAlreadyCompleted
 	}
-	if task.AssigneeDeptID != userDeptID {
-		return ErrDeptNotMatch
+
+	isAdmin := e.isAdminUser(tx, userID)
+	if !isAdmin {
+		if task.AssigneeDeptID != userDeptID {
+			return ErrDeptNotMatch
+		}
+		if task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
+			return ErrAssigneeNotMatch
+		}
 	}
-	if task.AssigneeUserID != 0 && task.AssigneeUserID != userID {
-		return ErrAssigneeNotMatch
-	}
+
 	if err := e.checkSoD(tx, task.ProcessInstanceID, task.NodeCode, userID); err != nil {
 		return err
 	}
@@ -591,6 +601,14 @@ func (e *Engine) getTaskForUpdate(tx *gorm.DB, taskID uint) (*taskRow, error) {
 		return nil, fmt.Errorf("task not found: %d", taskID)
 	}
 	return &row, nil
+}
+
+func (e *Engine) isAdminUser(tx *gorm.DB, userID uint) bool {
+	var isAdmin bool
+	if err := tx.Raw("SELECT COALESCE(is_admin, false) FROM users WHERE id = ?", userID).Scan(&isAdmin).Error; err != nil {
+		return false
+	}
+	return isAdmin
 }
 
 func (e *Engine) checkSoD(tx *gorm.DB, instanceID uint, nodeCode string, userID uint) error {
