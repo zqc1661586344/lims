@@ -90,7 +90,7 @@ import type { SampleReceiving } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<SampleReceiving[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<SampleReceiving | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

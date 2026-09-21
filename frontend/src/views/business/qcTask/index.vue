@@ -80,7 +80,7 @@ import type { QCTask } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<QCTask[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<QCTask | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

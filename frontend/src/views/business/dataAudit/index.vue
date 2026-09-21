@@ -99,7 +99,7 @@ import type { DataAudit } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<DataAudit[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<DataAudit | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

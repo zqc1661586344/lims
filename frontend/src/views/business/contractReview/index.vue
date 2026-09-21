@@ -87,7 +87,7 @@ import type { ContractReview } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<ContractReview[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<ContractReview | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

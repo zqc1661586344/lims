@@ -117,7 +117,7 @@ import type { ReportAudit, ReportPrepare, DataEntry } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<ReportAudit[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<ReportAudit | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

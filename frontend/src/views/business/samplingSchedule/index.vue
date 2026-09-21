@@ -79,7 +79,7 @@ import type { SamplingSchedule } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<SamplingSchedule[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<SamplingSchedule | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

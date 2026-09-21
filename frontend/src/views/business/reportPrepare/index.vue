@@ -120,7 +120,7 @@ import type { ReportPrepare, DataEntry } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<ReportPrepare[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<ReportPrepare | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

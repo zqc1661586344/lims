@@ -93,7 +93,7 @@ interface FieldSamplingRow extends FieldSamplingRecord {
 
 const loading = ref(false)
 const items = ref<FieldSamplingRow[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<FieldSamplingRecord | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

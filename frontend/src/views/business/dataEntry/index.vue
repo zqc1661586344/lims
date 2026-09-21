@@ -92,7 +92,7 @@ interface DataEntryRow extends DataEntry {
 
 const loading = ref(false)
 const items = ref<DataEntryRow[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<DataEntry | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

@@ -8,7 +8,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /build/lims-server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -o /build/lims-migrate ./cmd/migrate
 
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates tzdata wkhtmltopdf
+RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /build/lims-server .

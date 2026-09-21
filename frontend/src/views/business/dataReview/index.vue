@@ -99,7 +99,7 @@ import type { DataReview } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<DataReview[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<DataReview | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

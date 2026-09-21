@@ -116,7 +116,7 @@ import type { ProjectArchive } from '@/api/business'
 
 const loading = ref(false)
 const items = ref<ProjectArchive[]>([])
-const selectedRow = ref(null)
+const selectedRow = ref<ProjectArchive | null>(null)
 function handleRowClick(row: any) { selectedRow.value = row }
 const taskOrderIdFilter = ref('')
 

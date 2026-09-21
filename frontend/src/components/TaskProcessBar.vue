@@ -1,73 +1,71 @@
 <template>
-  <div
-    class="task-process-bar"
-    :class="{ sticky: sticky }"
-    v-if="progress || (resolvedBusinessId && !loading)"
-  >
-    <div class="process-header">
-      <span class="process-title">📋 流程进度</span>
-      <span class="process-status" :class="'status-' + progress.status">
-        {{ statusText }}
-      </span>
-      <span class="process-percent" v-if="progress.total_nodes > 0">
-        {{ completedCount }}/{{ progress.total_nodes }} 步
-      </span>
-    </div>
-    <el-steps
-      :active="progress.current_node_index >= 0 ? progress.current_node_index + 1 : 0"
-      process-status="process"
-      finish-status="success"
-      align-center
-      simple
-      :space-auto="false"
-    >
-      <el-step
-        v-for="node in visibleNodes"
-        :key="node.code"
-        :title="node.name"
-        :status="stepStatus(node)"
-        :icon="stepIcon(node)"
+  <div v-if="progress">
+    <div class="task-process-bar" :class="{ sticky: sticky }">
+      <div class="process-header">
+        <span class="process-title">📋 流程进度</span>
+        <span class="process-status" :class="'status-' + progress.status">
+          {{ statusText }}
+        </span>
+        <span class="process-percent" v-if="progress.total_nodes > 0">
+          {{ completedCount }}/{{ progress.total_nodes }} 步
+        </span>
+      </div>
+      <el-steps
+        :active="progress.current_node_index >= 0 ? progress.current_node_index + 1 : 0"
+        process-status="process"
+        finish-status="success"
+        align-center
+        simple
+        :space-auto="false"
       >
-        <template #icon>
-          <div class="step-icon" :class="'step-' + node.status">
-            <el-icon v-if="node.status === 'completed'"><Check /></el-icon>
-            <el-icon v-else-if="node.status === 'rejected'"><Close /></el-icon>
-            <el-icon v-else-if="node.status === 'current'" class="current-pulse"><Loading /></el-icon>
-            <span v-else>{{ node.index + 1 }}</span>
-          </div>
-        </template>
-      </el-step>
-    </el-steps>
-
-    <div class="compact-view" v-if="!expanded">
-      <el-button link size="small" @click="expanded = true">展开详情</el-button>
-    </div>
-    <div class="detail-view" v-else>
-      <el-divider style="margin: 12px 0" />
-      <div class="detail-nodes">
-        <div
-          v-for="node in progress.nodes"
+        <el-step
+          v-for="node in visibleNodes"
           :key="node.code"
-          class="detail-node"
-          :class="'detail-' + node.status"
+          :title="node.name"
+          :status="stepStatus(node)"
+          :icon="stepIcon(node)"
         >
-          <div class="detail-left">
-            <div class="detail-dot" :class="'dot-' + node.status"></div>
-            <span class="detail-name">{{ node.name }}</span>
-          </div>
-          <div class="detail-right">
-            <el-tag v-if="node.status === 'completed'" type="success" size="small">已完成</el-tag>
-            <el-tag v-else-if="node.status === 'rejected'" type="danger" size="small">已驳回</el-tag>
-            <el-tag v-else-if="node.status === 'current'" type="primary" size="small">进行中</el-tag>
-            <el-tag v-else-if="node.status === 'skipped'" type="info" size="small">已跳过</el-tag>
-            <el-tag v-else type="info" size="small" effect="plain">待处理</el-tag>
-            <span v-if="node.comment" class="detail-comment">
-              <el-icon><ChatDotRound /></el-icon>
-            </span>
+          <template #icon>
+            <div class="step-icon" :class="'step-' + node.status">
+              <el-icon v-if="node.status === 'completed'"><Check /></el-icon>
+              <el-icon v-else-if="node.status === 'rejected'"><Close /></el-icon>
+              <el-icon v-else-if="node.status === 'current'" class="current-pulse"><Loading /></el-icon>
+              <span v-else>{{ node.index + 1 }}</span>
+            </div>
+          </template>
+        </el-step>
+      </el-steps>
+
+      <div class="compact-view" v-if="!expanded">
+        <el-button link size="small" @click="expanded = true">展开详情</el-button>
+      </div>
+      <div class="detail-view" v-else>
+        <el-divider style="margin: 12px 0" />
+        <div class="detail-nodes">
+          <div
+            v-for="node in progress.nodes"
+            :key="node.code"
+            class="detail-node"
+            :class="'detail-' + node.status"
+          >
+            <div class="detail-left">
+              <div class="detail-dot" :class="'dot-' + node.status"></div>
+              <span class="detail-name">{{ node.name }}</span>
+            </div>
+            <div class="detail-right">
+              <el-tag v-if="node.status === 'completed'" type="success" size="small">已完成</el-tag>
+              <el-tag v-else-if="node.status === 'rejected'" type="danger" size="small">已驳回</el-tag>
+              <el-tag v-else-if="node.status === 'current'" type="primary" size="small">进行中</el-tag>
+              <el-tag v-else-if="node.status === 'skipped'" type="info" size="small">已跳过</el-tag>
+              <el-tag v-else type="info" size="small" effect="plain">待处理</el-tag>
+              <span v-if="node.comment" class="detail-comment">
+                <el-icon><ChatDotRound /></el-icon>
+              </span>
+            </div>
           </div>
         </div>
+        <el-button link size="small" @click="expanded = false">收起</el-button>
       </div>
-      <el-button link size="small" @click="expanded = false">收起</el-button>
     </div>
   </div>
 
