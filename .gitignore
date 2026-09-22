@@ -24,6 +24,9 @@ frontend/dist/
 # Local dev config (sensitive)
 backend/config/config.dev.yaml
 
+# pkg
+pkg/
+
 # Docker volumes data (don't commit)
 postgres_data/
 minio_data/
