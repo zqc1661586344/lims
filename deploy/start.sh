@@ -258,8 +258,6 @@ LIMS Ubuntu 部署指南
 
   # 4. 配置 nginx 反向代理
   sudo cp deploy/nginx/lims.conf /etc/nginx/sites-available/lims
-  sudo sed -i 's|root /usr/share/nginx/html;|root /var/www/lims;|' /etc/nginx/sites-available/lims
-  sudo sed -i 's|lims-backend:8080|127.0.0.1:8080|' /etc/nginx/sites-available/lims
   sudo ln -sf /etc/nginx/sites-available/lims /etc/nginx/sites-enabled/
   sudo rm -f /etc/nginx/sites-enabled/default
   sudo nginx -t && sudo systemctl restart nginx

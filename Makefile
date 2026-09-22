@@ -1,4 +1,4 @@
-.PHONY: dev-backend dev-frontend dev docker-up docker-down build build-backend build-frontend
+.PHONY: dev-backend dev-frontend dev docker-up docker-down build build-backend build-frontend build-ubuntu
 
 # Development — run locally
 dev-backend:
@@ -25,3 +25,7 @@ build-frontend:
 	cd frontend && npm run build
 
 build: build-backend build-frontend
+
+# Build Ubuntu deployment package
+build-ubuntu:
+	cd deploy && ./start.sh ubuntu
